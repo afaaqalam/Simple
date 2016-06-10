@@ -1,2 +1,2 @@
 # simple
-simple express login with session management
+simple expressjs app with user login and session management
