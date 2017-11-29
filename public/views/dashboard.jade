@@ -1,0 +1,21 @@
+extends base
+
+block body
+  h1 Dashboard
+  p.
+    You are now logged in. <a href="/logout">Logout</a>
+
+
+  h2 Hello, #{user.firstName}  
+  p Email:      #{user.email}
+  p Data:       #{user.data}
+
+  
+  button#getQ Get-Question
+
+  button#cRoom Create Room
+  button#lRoom List Existing Game Rooms
+  //br
+  //input(type="text", name="answer")
+  //br
+  
