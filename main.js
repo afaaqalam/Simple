@@ -42,6 +42,8 @@ var User = mongoose.model('User', new Schema({
 
 //Socket Testing
 
+var AllGames = {};
+
 io.on('connection', function (socket) {
   console.log("User "+ socket.id + " connected"); 
   
@@ -65,15 +67,23 @@ io.on('connection', function (socket) {
   });
 
   var sid;
+  
+  //var dict = {'gameid', 'countPlayer'};
   socket.on('createGameRoom', function(){
     var thisGameId = (Math.random() * 100000) | 0;
     socket.emit('newGameRoomCreated', {gameId: thisGameId, mySocketId: socket.id});
     console.log('GameRoomCreated: '+thisGameId);
     socket.join(thisGameId.toString());
     sid = socket.id;
+    var numPlayersInRoom = 1;
+    AllGames[thisGameId] = numPlayersInRoom;
+    //console.log("AllGames-gameId: "+AllGames.gameId+ "  AllGames-numPlayersInRoom: "+AllGames.numPlayersInRoom);
+    //create an entry in db now // { "4121231": 1}
+
+    
   });
 
-  socket.on('listGameRooms', function(){
+  socket.on('Old-listGameRooms', function(){
     var availableRooms = [];
     var rooms = io.sockets.adapter.rooms;
     console.log("rooms object: "+rooms);
@@ -91,8 +101,34 @@ io.on('connection', function (socket) {
     console.log("TESTING: " + result);
     
   });
+
+  
+
+  socket.on('listGameRooms', function(){
+    for(var i in AllGames)
+    { if(AllGames[i] < 2){
+        console.log(i+" value: "+AllGames[i]);
+        //push to another array
+      }
+    }
+    console.log('sending AllGames to client..');
+    socket.emit('sendGameRooms', AllGames);
+    console.log('emitted sendGameRooms');  
+  });
+
+  socket.on('jointo', function(gRoom){
+    socket.join(gRoom);
+    console.log('Joined '+gRoom);
+    AllGames[gRoom] = 2;
+    //write to db both players and game model and resume model
+    //gameInit();
+    io.to(gRoom).emit('testQuestion', 'What is the capital of India?');
+    console.log('emitted Test Question to '+gRoom);
+  });
 });
 
+//function gameInit(){
+//};
 
 
 //Routes

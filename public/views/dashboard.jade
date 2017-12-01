@@ -7,15 +7,23 @@ block body
 
 
   h2 Hello, #{user.firstName}  
-  p Email:      #{user.email}
-  p Data:       #{user.data}
+  //p Email:      #{user.email}
+  //p Data:       #{user.data}
 
   
-  button#getQ Get-Question
-
-  button#cRoom Create Room
-  button#lRoom List Existing Game Rooms
-  //br
-  //input(type="text", name="answer")
-  //br
+  #content
+    .options 
+      button#cRoomBtn Create Game
+      button#lRoomBtn Join Game
+  
+  p(hidden).waitMsg
+    | Waiting for second Player to join.
+  
+  p(hidden).joinMsg
+    | Select a Game Room to join.
+  
+  #roomList
+    .availList
+      
+  button(hidden)#jRoomBtn Join
   
