@@ -17,15 +17,20 @@ var socket = io.connect("http://localhost:3000", {
 });*/
 
 socket.on('newQ', function(question){
-  alert(question);
+  App.id = question.c;
+  alert(App.id);
+  //$("<p>What is the capital of "+ question +" ?</p><br/>").appendTo("#qOne");
+  //$("#FieldAns").show();
+  //$("#qOne").text(question);
 });
 
-var App = {gameId:0, mySocketId:0, numPlayersInRoom:0};
+var App = {gameId:0, mySocketId:0, numPlayersInRoom:0, points: 0, id:0};
 
 socket.on('newGameRoomCreated', function(data){
   App.gameId = data.gameId;
   App.mySocketId = data.mySocketId;
   App.numPlayersInRoom = 1;
+  App.points = 0;
   console.log('GameRoom created with Id: '+ App.gameId + ' and socketId: '+ App.mySocketId + ' with '+App.numPlayersInRoom+' Players');
   $(".options").hide();
   $(".waitMsg").show();
@@ -50,31 +55,11 @@ socket.on('testQuestion', function(data){
   console.log("Server: "+data);
 });
 
-
-$(function(){
-  $("#cRoomBtn").one('click',function(){
-    createRoom();
-  });
-
-  $("#lRoomBtn").one('click',function(){
-    listGameRooms();
-  });
-
-  $("#jRoomBtn").one('click',function(){
-    joinRoom();
-  });
-
-  $("#getQ").bind('click',function(){
-    //alert('clicked me!');
-    sendQuestion();
-  });
-
-});
-
-
-function sendQuestion(){
-  socket.emit('sendQ','Client: send me a question!');
-};
+socket.on('startTimer',function(){
+  console.log('countDowner called');
+  var $timeLeft = $("#countDown");
+  countDowner($timeLeft, 5, start)
+}); 
 
 var createRoom = function(){
   socket.emit('createGameRoom');
@@ -89,7 +74,47 @@ var listGameRooms = function(){
 var joinRoom = function(){
   console.log("Joining room: "+ $("input:radio:checked").val());
   var gRoom = $("input:radio:checked").val();
-  socket.emit('jointo', gRoom);
+  socket.emit('joinTo', gRoom);
+  $(".joinMsg").hide();
+  //$(".waitMsg").hide();
+  $("#roomList").hide();
+  console.log('GameRoom to Join: '+$("input:radio:checked").val());
   //alert($("input:radio:checked").val());
 };
 
+function countDowner( $element, startTime, callback) {
+  $(".waitMsg").hide();
+  $element.show();
+  $element.text(startTime);
+  var timer = setInterval(countItDown,1000);
+  function countItDown(){
+    startTime -= 1
+    $element.text(startTime);
+    if( startTime <= 0 ){
+      console.log('CountDowner Finished.');
+      clearInterval(timer);
+      callback();
+      $element.hide();
+      return;
+    }
+  }
+};
+
+function start(){
+  socket.emit('sendQ');
+  console.log("emitted sendQ");
+};          
+
+$(function(){
+  $("#cRoomBtn").one('click',function(){
+    createRoom();
+  });
+
+  $("#lRoomBtn").one('click',function(){
+    listGameRooms();
+  });
+
+  $("#jRoomBtn").one('click',function(){
+    joinRoom();
+  });
+});
