@@ -10,6 +10,8 @@ var session = require('express-session');
 var path = require('path');
 var morgan = require('morgan')
 var cors = require('cors')
+var bcrypt = require('bcrypt');
+var validator = require('express-validator');
 
 //Jade
 app.use(express.static(path.join(__dirname,'public')));
@@ -18,15 +20,19 @@ app.set('views', __dirname + '/public/views');
 
 app.use(morgan('combined'));
 app.use(cors());
-//app.use(bodyParser.json())
-app.use(bodyParser.urlencoded({extended: true}));
+app.use(bodyParser.json())
+app.use(bodyParser.urlencoded({extended: false}));
+app.use(validator());
 app.use(session({
-  cookieName: 'session',
+  cookieName: 'cqsession',
   secret: 'asdfqwer1234wqedfasdfa',
   saveUninitialized: false,
   resave: false,
-  cookie: { maxAge: 600000 },
+  cookie: { maxAge: 600000, secure: false  },
 }));
+
+//Password Hashing
+var saltRounds = 11;
 
 //Database
 var con = mysql.createConnection({
@@ -47,9 +53,9 @@ con.connect(function(err) {
   });
 });
 
-//Socket Testing
 
-//var country = "India";
+
+//Socket Testing
 var AllGames = {};
 
 io.on('connection', function (socket) {
@@ -123,23 +129,42 @@ app.get('/register', function(req, res){
 });
 
 app.post('/register', function(req, res) {
-  //var Actual-sql = "INSERT INTO user VALUES(req.body.firstName, req.body.email, req.body.password);";
-  var sql = "INSERT INTO user VALUES(?, ?, ?)";
-  var inserts = [req.body.firstName, req.body.email, req.body.password];
-  sql = mysql.format(sql, inserts);
-  con.query(sql,function(err){
+  //validate name, email, password input
+  var name = req.body.name;
+  var email = req.body.name;
+  var password = req.body.name;
+
+  req.checkBody('name', 'Name is required!').notEmpty();
+  req.checkBody('email', 'Email address is required!').notEmpty();
+  req.checkBody('email', 'Enter a valid Email address!').isEmail();
+  req.check('password', 'Password must be at least 8 characters long!').isLength({ min: 8 });
+    
+  var errors = req.validationErrors();
+
+  if(errors){
+    console.log(errors);
+    return res.render('register.jade', {error: errors});
+  }
+
+  bcrypt.hash(req.body.password, 11, function(err, hPassword){
     if(err){
-      console.log("database error: "+err);
-      console.log("database error code: "+err.code);
-      var error = 'Something bad happened! Please try again.';
-      if(err.code === 'ER_DUP_ENTRY'){
-        error = 'That email is already taken, please try another.'
+      console.log(err);
+    }
+    var sql = "INSERT INTO user VALUES(?, ?, ?)";
+    var inserts = [req.body.name, req.body.email, hPassword];
+    sql = mysql.format(sql, inserts);
+    con.query(sql,function(err){
+      if(err){
+        var error = 'Something bad happened! Please try again.';
+        if(err.code === 'ER_DUP_ENTRY'){
+          error = 'That email is already taken, please try another.'
+        }
+        res.render('register.jade', {error: error});
       }
-      res.render('register.jade', {error: error});
-    }
-    else{
-      res.redirect('/dashboard');
-    }
+      else{
+        res.redirect('/login');
+      }
+    });
   });
 });
 
@@ -166,7 +191,20 @@ app.get('/login', function(req, res){
 });
 
 app.post('/login', function(req, res){
-  //var sql = "SELECT * FROM user WHERE email = 'req.body.email';";
+  var email = req.body.name;
+  var password = req.body.name;
+
+  req.checkBody('email', 'Invalid email or password!').notEmpty();
+  req.checkBody('email', 'Invalid email or password!').isEmail();
+  req.check('password', 'Invalid email or password!').isLength({ min: 8 });
+    
+  var errors = req.validationErrors();
+
+  if(errors){
+    console.log(errors);
+    return res.render('login.jade', {error: errors});
+  }
+
   var sql = "SELECT * FROM user WHERE email = ?";
   var inserts = [req.body.email];
   sql = mysql.format(sql,inserts);
@@ -177,22 +215,19 @@ app.post('/login', function(req, res){
       res.render('login.jade', {error:'Invalid email or password!'});
     }
     else{
+      console.log('no error, checking results length');
       if(results.length > 0){
-        if(results[0].password === req.body.password){
-          console.log('before setting session');
-          //req.session.user= {"email": req.body.email, "name":results[0].name};
+        bcrypt.compare(req.body.password, results[0].password, function(err, fin){
+          if(!fin){
+            res.render('login.jade',{error: 'Invalid email or password!'});
+          }
           req.session.email = req.body.email;
           req.session.name = results[0].name;
-          console.log("passwords match, redirecting to dashboard");
-          console.log("session name: ",req.session.name);
-          console.log("session email: ",req.session.email);
-
-          console.log('success, rendering dashboard');
           res.redirect('/dashboard');
-        }
-        else{
-          res.render('login.jade',{error: 'Invalid email or password!'});
-        }
+        });
+      }
+      else{
+        res.render('login.jade',{error: 'Invalid email or password!'});
       }
     }  
   });

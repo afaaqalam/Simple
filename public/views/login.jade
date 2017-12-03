@@ -4,8 +4,19 @@ extends base
 block body
   h1 Login
 
+  style(type='text/css').
+    .errorDiv, .err{
+      color: red;
+      margin-bottom: 2em;
+    }
+
+  .errorDiv
+    if error  
+      p!= error[0].msg
+  
+
   if error
-    p ERROR: #{error}
+    p.err #{error}
 
   form(method="post")
     span Email: 
