@@ -5,7 +5,8 @@ var io = require('socket.io')(http);
 
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
-var sessions = require('client-sessions');
+var mysql = require('mysql');
+var session = require('express-session');
 var path = require('path');
 var morgan = require('morgan')
 var cors = require('cors')
@@ -19,40 +20,36 @@ app.use(morgan('combined'));
 app.use(cors());
 //app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({extended: true}));
-app.use(sessions({
+app.use(session({
   cookieName: 'session',
   secret: 'asdfqwer1234wqedfasdfa',
-  duration: 30 * 60 * 1000,
-  activeDuration: 5 * 60 * 1000,
-}))
-
-//Database
-
-var Schema = mongoose.Schema;
-var ObjectId = Schema.ObjectId;
-mongoose.connect('mongodb://localhost/auth', { useMongoClient: true });
-
-var User = mongoose.model('User', new Schema({
-  id: ObjectId,
-  firstName: String,
-  lastName: String,
-  email: {type: String, unique: true},
-  password: String
+  saveUninitialized: false,
+  resave: false,
+  cookie: { maxAge: 600000 },
 }));
 
-var CountrySchema = Schema({
-  country: String,
-  capital: String
+//Database
+var con = mysql.createConnection({
+  host: "localhost",
+  user: "crossquiz",
+  password: "isa681",
+  database: "testing",
+  multipleStatements: true
 });
 
-
-//all the models
+con.connect(function(err) {
+  if (err) throw err;
+  console.log("Connected to Database!");
+  var sql = 'CREATE TABLE IF NOT EXISTS user (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255)); CREATE TABLE IF NOT EXISTS countries (id INTEGER AUTO_INCREMENT, country VARCHAR(255), capital VARCHAR(255), PRIMARY KEY(id) ); CREATE TABLE IF NOT EXISTS stats(email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER); CREATE TABLE IF NOT EXISTS game (game_id INTEGER, email VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id, email)); CREATE TABLE IF NOT EXISTS gamescores (game_id INTEGER, email VARCHAR(255), q1 INTEGER, q2 INTEGER, q3 INTEGER, q4 INTEGER, q5 INTEGER, q6 INTEGER, q7 INTEGER, q8 INTEGER, q9 INTEGER, q10 INTEGER, FOREIGN KEY(game_id, email) REFERENCES game(game_id, email)); CREATE TABLE IF NOT EXISTS gamemoves (game_id INTEGER, email VARCHAR(255), a1 VARCHAR(255), a2 VARCHAR(255), a3 VARCHAR(255), a4 VARCHAR(255), a5 VARCHAR(255), a6 VARCHAR(255), a7 VARCHAR(255), a8 VARCHAR(255), a9 VARCHAR(255), a10 VARCHAR(255), FOREIGN KEY(game_id, email) REFERENCES game(game_id, email) ); CREATE TABLE IF NOT EXISTS gq (game_id INTEGER, id INTEGER, FOREIGN KEY(id) REFERENCES countries(id));';
+  con.query(sql, function (err, result) {
+    if (err) throw err;
+    console.log("All tables created!");
+  });
+});
 
 //Socket Testing
 
-
-
-var country = "India";
+//var country = "India";
 var AllGames = {};
 
 io.on('connection', function (socket) {
@@ -73,18 +70,17 @@ io.on('connection', function (socket) {
 
 
   socket.on('sendQ', function(){
-    socket.emit('newQ', {c: country});
-    console.log("SID: "+country);
+    socket.emit('newQ', "India");
+    //console.log("SID: "+country);
   });
 
   var sid;
-  var uEmail;//req.session.user;
-
+  
   
   //var dict = {'gameid', 'countPlayer'};
   socket.on('createGameRoom', function(){
     var thisGameId = (Math.random() * 100000) | 0;
-    socket.emit('newGameRoomCreated', {gameId: thisGameId, mySocketId: socket.id, email: uEmail});
+    socket.emit('newGameRoomCreated', {gameId: thisGameId, mySocketId: socket.id});
     console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
     socket.join(thisGameId.toString());
     sid = socket.id;
@@ -116,10 +112,6 @@ io.on('connection', function (socket) {
   });
 });
 
-//function gameInit(){
-//};
-
-
 //Routes
 
 app.get('/', function(req,res){
@@ -131,39 +123,42 @@ app.get('/register', function(req, res){
 });
 
 app.post('/register', function(req, res) {
-  var user = new User({
-    firstName:  req.body.firstName,
-    lastName:   req.body.lastName,
-    email:      req.body.email,
-    password:   req.body.password
-  });
-  user.save(function(err) {
-    if (err) {
+  //var Actual-sql = "INSERT INTO user VALUES(req.body.firstName, req.body.email, req.body.password);";
+  var sql = "INSERT INTO user VALUES(?, ?, ?)";
+  var inserts = [req.body.firstName, req.body.email, req.body.password];
+  sql = mysql.format(sql, inserts);
+  con.query(sql,function(err){
+    if(err){
+      console.log("database error: "+err);
+      console.log("database error code: "+err.code);
       var error = 'Something bad happened! Please try again.';
-
-      if (err.code === 11000) {
-        error = 'That email is already taken, please try another.';
+      if(err.code === 'ER_DUP_ENTRY'){
+        error = 'That email is already taken, please try another.'
       }
-
-      res.render('register.jade', { error: error });
-    } else {
-      //utils.createUserSession(req, res, user);
+      res.render('register.jade', {error: error});
+    }
+    else{
       res.redirect('/dashboard');
     }
   });
 });
 
 app.get('/login', function(req, res){
-  if(req.session && req.session.user){
-	User.findOne({email: req.session.user.email}, function(err,user){
-		if(!user){
-			req.session.reset();
-			res.redirect('/login');
-		} else{
-			res.locals.user = user;
-			res.render('dashboard.jade');
-		}
-	})
+  if(req.session && req.session.email){
+    var sql = "SELECT * from user where email = ?";
+    var inserts = [req.session.email];
+    sql = mysql.format(sql, inserts);
+    con.query(sql, function(err, results, fields){
+      if(results.length < 0){
+        req.session.destroy();
+        res.redirect('/login');
+      }
+      else{
+        res.locals.email = results[0].email;
+        res.locals.name = results[0].name;
+        res.render('dashboard.jade');
+      }
+    });
   }
   else {		
   res.render('login.jade');
@@ -171,35 +166,76 @@ app.get('/login', function(req, res){
 });
 
 app.post('/login', function(req, res){
-  User.findOne({email: req.body.email }, function(err, user){
-    if(!user){
-      res.render('login.jade', {error: 'Invalid email or password!'});
+  //var sql = "SELECT * FROM user WHERE email = 'req.body.email';";
+  var sql = "SELECT * FROM user WHERE email = ?";
+  var inserts = [req.body.email];
+  sql = mysql.format(sql,inserts);
+  console.log("login query: ",sql);
+  con.query(sql, function(err, results, fields){
+    if(err){
+      console.log(err);
+      res.render('login.jade', {error:'Invalid email or password!'});
     }
     else{
-      if(req.body.password === user.password){
-        req.session.user = user;
-        console.log("request-session-user: "+req.session.user);
-        res.redirect('/dashboard');
-      } else {
-        res.render('login.jade', {error: 'Invalid email or password!'});
+      if(results.length > 0){
+        if(results[0].password === req.body.password){
+          console.log('before setting session');
+          //req.session.user= {"email": req.body.email, "name":results[0].name};
+          req.session.email = req.body.email;
+          req.session.name = results[0].name;
+          console.log("passwords match, redirecting to dashboard");
+          console.log("session name: ",req.session.name);
+          console.log("session email: ",req.session.email);
+
+          console.log('success, rendering dashboard');
+          res.redirect('/dashboard');
+        }
+        else{
+          res.render('login.jade',{error: 'Invalid email or password!'});
+        }
       }
-    }
-  })
+    }  
+  });
 });
 
 app.get('/dashboard', function(req, res){
-  if(req.session && req.session.user){
-    User.findOne({email: req.session.user.email}, function(err,user){
-      if(!user){
-        req.session.reset();
+  if(req.session && req.session.email){
+    var sql = "SELECT * from user where email = ?";
+    var inserts = [req.session.email];
+    sql = mysql.format(sql, inserts);
+    con.query(sql, function(err, results, fields){
+      if(results.length < 0){
+        req.session.destroy();
         res.redirect('/login');
-      } else{
-        res.locals.user = user;
-        //console.log("request-session-user: "+req.session.user);
-        console.log("request-locals-user: "+res.locals.user.email);
+      }
+      else{
+        res.locals.email = results[0].email;
+        res.locals.name = results[0].name;
         res.render('dashboard.jade');
       }
-    })
+    });
+  }
+  else{
+    res.redirect('/login');
+  }
+});    
+
+app.get('/stats', function(req, res){
+  if(req.session && req.session.email){
+    var sql = "SELECT * from user where email = ?";
+    var inserts = [req.session.email];
+    sql = mysql.format(sql, inserts);
+    con.query(sql, function(err, results, fields){
+      if(results.length < 0){
+        req.session.reset();
+        res.redirect('/login');
+      }
+      else{
+        res.locals.email = results[0].email;
+        res.locals.name = results[0].name;
+        res.render('stats.jade');
+      }
+    });
   }
   else{
     res.redirect('/login');
@@ -207,7 +243,7 @@ app.get('/dashboard', function(req, res){
 });
 
 app.get('/logout', function(req, res){
-  req.session.reset();
+  req.session.destroy();
   res.redirect('/');
 });
 
@@ -215,5 +251,29 @@ var port = process.env.PORT || 3000;
 http.listen(port, '127.0.0.1');
 console.log("Server is listening on "+ port);
 
+/*
 
-//io.sockets.connected[ socket.id ].emit('privateMsg', 'hello this is a private msg');
+io.sockets.connected[ socket.id ].emit('privateMsg', 'hello this is a private msg');
+
+CREATE TABLE user (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255));
+
+CREATE TABLE countries (id INTEGER AUTO_INCREMENT PRIMARY KEY, country VARCHAR(255), capital  VARCHAR(255)); 
+
+CREATE TABLE game (game_id INTEGER, email VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id, email)); 
+
+CREATE TABLE stats(email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER);
+
+CREATE TABLE gamescores (game_id INTEGER, email VARCHAR(255), q1 INTEGER, q2 INTEGER, q3 INTEGER, q4 INTEGER, q5 INTEGER, q6 INTEGER, q7 INTEGER, q8 INTEGER, q9 INTEGER, q10 INTEGER, FOREIGN KEY(game_id, email) REFERENCES game(game_id, email));
+
+CREATE TABLE gamemoves (game_id INTEGER, email VARCHAR(255), a1 VARCHAR(255), a2 VARCHAR(255), a3 VARCHAR(255), a4 VARCHAR(255), a5 VARCHAR(255), a6 VARCHAR(255), a7 VARCHAR(255), a8 VARCHAR(255), a9 VARCHAR(255), a10 VARCHAR(255), FOREIGN KEY(game_id, email) REFERENCES game(game_id, email) );
+
+CREATE TABLE gq (game_id INTEGER, id INTEGER, FOREIGN KEY(id) REFERENCES countries(id));
+
+>>for stats page
+SELECT a.name, b.wins, b.losses FROM user a JOIN stats b ON a.email = b.email;
+
+>> for gamemoves page
+// query needed
+//select game_id,email,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10 from gamemoves where game_id in (select game_id from game where game_id in (select game_id from game where email='rob@gmail.com') and email!='rob@gmail.com');
+*/
+

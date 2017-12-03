@@ -3,12 +3,11 @@ extends base
 block body
   h1 Dashboard
   p.
-    You are now logged in. <a href="/logout">Logout</a>
-
-
-  h2 Hello, #{user.firstName}  
-  //p Email:      #{user.email}
-  //p Data:       #{user.data}
+    <a href="/stats">Stats</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
+  
+  h2 Hello, #{name}  
+  //p Email:      #{email}
+  
 
   style(type='text/css').
     .numCircle {

@@ -17,11 +17,11 @@ var socket = io.connect("http://localhost:3000", {
 });*/
 
 socket.on('newQ', function(question){
-  App.id = question.c;
-  alert(App.id);
-  //$("<p>What is the capital of "+ question +" ?</p><br/>").appendTo("#qOne");
-  //$("#FieldAns").show();
-  //$("#qOne").text(question);
+  //App.id = question.c;
+  //alert(q);
+  $("<p>What is the capital of "+ question +" ?</p><br/>").appendTo("#qOne");
+  $("#FieldAns").show();
+  $("#qOne").text(question);
 });
 
 var App = {gameId:0, mySocketId:0, numPlayersInRoom:0, points: 0, id:0};
