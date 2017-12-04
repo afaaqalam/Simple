@@ -6,7 +6,7 @@ block body
     <a href="/stats">Stats</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
   
   h2 Hello, #{name}  
-  //p Email:      #{email}
+  p(hidden)#hEmail Email: #{email}
   
 
   style(type='text/css').
@@ -26,7 +26,7 @@ block body
       margin-top: 2em;   
     },
     .FAns{
-      margin-top: 2em;
+      margin-top: 20px;
     },
     .ques{
       font: 60px Arial, sans-serif;
@@ -52,12 +52,22 @@ block body
 
   #countDown.numCircle(hidden) 
   
-  #qOne.ques
+  #qOne.toast
   
   #FieldAns(hidden)
     .FAns
-      input#answer.ans
       <br/>
-      button#sendAns Submit
+      <br/>
+      <br/>
+      <br/>
+      <br/>
+      #info.toast
+      input#ansInput.ans
+      <br/>
+      button#sendAnsBtn Submit
+
+  #ScoreArea(hidden)
+    .SArea
+      p#totalScore    
 
   

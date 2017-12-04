@@ -28,7 +28,7 @@ app.use(session({
   secret: 'asdfqwer1234wqedfasdfa',
   saveUninitialized: false,
   resave: false,
-  cookie: { maxAge: 600000, secure: false  },
+  cookie: { maxAge: 600000, secure: false },
 }));
 
 //Password Hashing
@@ -53,11 +53,17 @@ con.connect(function(err) {
   });
 });
 
-
+//sleep function
+function sleep(seconds){
+  var waitUntil = new Date().getTime() + seconds*1000;
+  while(new Date().getTime() < waitUntil) true;
+};
 
 //Socket Testing
 var AllGames = {};
 
+var countries = [1,2,3,4,5,6,7,8,9,10]; // remove countries from here
+var c;
 io.on('connection', function (socket) {
   console.log("User "+ socket.id + " connected"); 
   
@@ -65,7 +71,6 @@ io.on('connection', function (socket) {
     setTimeout(function () {
       console.log("User "+ socket.id +" disconnected!");
     }, 10000);
-    //console.log("User "+ socket.id +" disconnected!");
   });
 
   var list = io.sockets.sockets; 
@@ -75,10 +80,6 @@ io.on('connection', function (socket) {
   }); 
 
 
-  socket.on('sendQ', function(){
-    socket.emit('newQ', "India");
-    //console.log("SID: "+country);
-  });
 
   var sid;
   
@@ -86,7 +87,7 @@ io.on('connection', function (socket) {
   //var dict = {'gameid', 'countPlayer'};
   socket.on('createGameRoom', function(){
     var thisGameId = (Math.random() * 100000) | 0;
-    socket.emit('newGameRoomCreated', {gameId: thisGameId, mySocketId: socket.id});
+    socket.emit('newGameRoomCreated', {gRoomId: thisGameId, mySocketId: socket.id, numPlayersInRoom: 1});
     console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
     socket.join(thisGameId.toString());
     sid = socket.id;
@@ -94,11 +95,10 @@ io.on('connection', function (socket) {
     AllGames[thisGameId] = numPlayersInRoom;
     //console.log("AllGames-gameId: "+AllGames.gameId+ "  AllGames-numPlayersInRoom: "+AllGames.numPlayersInRoom);
     //create an entry in db now // { "4121231": 1}
-    socket.on('sendQ', function(data){
-    console.log(data);
-    socket.emit('newQ', {Scktid: sid});
-  }); 
-    
+    //socket.on('sendQ', function(data){
+      //console.log(data);
+      //socket.emit('newQ', {Scktid: sid});
+    //}); 
   });
 
   socket.on('listGameRooms', function(){
@@ -107,16 +107,118 @@ io.on('connection', function (socket) {
     console.log('emitted sendGameRooms');  
   });
 
-  socket.on('joinTo', function(gRoom){
-    socket.join(gRoom);
-    console.log('Joined '+gRoom);
-    AllGames[gRoom] = 2;
+  socket.on('joinTo', function(gRoomId){
+    socket.join(gRoomId);
+    var info = {'gRoomId': gRoomId,'mySocketId': socket.id, 'numPlayersInRoom': 2};
+    console.log('Joined '+gRoomId);
+    console.log(info);
+    AllGames[gRoomId] = 2;
+    socket.emit('updateGameInfo', info);
     //write to db both players and game model and resume model
     //gameInit();
-    console.log('emitted startTimer to '+gRoom);
-    io.to(gRoom).emit('startTimer');
+    console.log('emitted startTimer to GameRoom: '+gRoomId);
+    io.to(gRoomId).emit('startTimer');
+
   });
+
+  socket.on('getAllCountries', function(content){
+    console.log("sent question to "+content.sid+' in gameRoomId: '+content.gRoomId);
+    //var q = {'country': 'India'};
+    // populate 10 random values in range(1-195) -> countries
+    io.sockets.connected[content.sid].emit('takeAllCountries', countries);
+  });
+
+  socket.on('sendQuestion', function(data){
+    //db updations now
+    var gRoomId = data.gRoomId;
+    var cId = data.countryId;
+    var roundCount = data.roundCount;
+    var socketid = data.sid;
+    console.log("Received from "+socketid+" from gRoomId: "+gRoomId+" for round: "+roundCount+" for countryId: "+cId);
+    
+    var sql = "SELECT country FROM countries where id = ?;";
+    var inserts = [cId];
+    sql = mysql.format(sql, inserts);
+    console.log('Country fetch query: '+sql);
+    con.query(sql, function(err, results, field){
+      if(err){
+        console.log(err);
+      }
+      c = results[0].country;
+      console.log("results value from sql db: "+c);
+      var question = {'country': c};
+      console.log("sent country: "+c+" to socketid: "+socketid);
+      io.sockets.connected[socketid].emit('takeQuestion', question);
+    });
+  });
+
+  socket.on('checkAnswer', function(answer){
+    var answeredCapital = answer.myAns;
+    var askedCountry = answer.country;
+    var socketid = answer.sid;
+    var nextId = answer.nextId;
+    var pEmail = answer.email;
+    var score = answer.point
+    var round = answer.round;
+    var sql = "SELECT capital from countries where country = ?;";
+    var inserts = [askedCountry];
+    sql = mysql.format(sql, inserts);
+    console.log("query: "+sql);
+    con.query(sql, function(err, results, fields){
+      console.log(results[0]);
+      if(err){
+        console.log(err);
+      }
+        
+      else{
+        if( answeredCapital === results[0].capital ){
+          console.log("correct answer!");
+          score += 1;
+          //update db scores and other dependencies here. or below
+          io.sockets.connected[socketid].emit('questionResult', {"point": score});
+          // sleep(1);
+          // update db with the attempt from client
+          // update db with scores of email
+          // increment score for socketid received
+          // DONE : emit that answer was correct  
+          // DONE : emit new question without wait
+          // DONE : select country from db for nextId countryId.
+          // DONE : setInterval for 2 seconds and then emit takeQuestion
+          var sql = "SELECT country from countries where id = ?;";
+          var inserts = [nextId];
+          sql = mysql.format(sql, inserts);
+          console.log("query: "+sql);
+          con.query(sql, function(err, results, fields){
+            if(err){
+              console.log(err);
+            }
+            console.log('nextCountry: '+results[0].country);
+            io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});    
+          });
+        } 
+        else{
+          console.log("wrong answer!");
+          io.sockets.connected[socketid].emit('questionResult', {"point": score});
+          // update db with attempt
+          var sql = "SELECT country from countries where id = ?;";
+          var inserts = [nextId];
+          sql = mysql.format(sql, inserts);
+          console.log("query: "+sql);
+          con.query(sql, function(err, results, fields){
+            if(err){
+              console.log(err);
+            }
+            console.log('nextCountry: '+results[0].country);
+            io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});
+          });
+        }  
+      }
+    });
+  });
+
+
 });
+
 
 //Routes
 
@@ -212,18 +314,20 @@ app.post('/login', function(req, res){
   con.query(sql, function(err, results, fields){
     if(err){
       console.log(err);
-      res.render('login.jade', {error:'Invalid email or password!'});
+      return res.render('login.jade', {error:'Invalid email or password!'});
     }
     else{
-      console.log('no error, checking results length');
+      console.log('no error, checking results length, results.length: '+results.length);
       if(results.length > 0){
         bcrypt.compare(req.body.password, results[0].password, function(err, fin){
           if(!fin){
-            res.render('login.jade',{error: 'Invalid email or password!'});
+            console.log('passwords do not match');
+            return res.render('login.jade',{error: 'Invalid email or password!'});
           }
+          console.log('passwords match');
           req.session.email = req.body.email;
           req.session.name = results[0].name;
-          res.redirect('/dashboard');
+          return res.redirect('/dashboard');
         });
       }
       else{

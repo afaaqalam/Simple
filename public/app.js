@@ -1,37 +1,23 @@
 //var socket = io({transports: ['websocket'], upgrade: false}).connect("http://localhost:3000");
 var socket = io.connect("http://localhost:3000");
+var App = { gRoomId: 0, 
+            pEmail: "",
+            mySocketId: 0, 
+            numPlayersInRoom: 0, 
+            roundCount: 0, 
+            currCountry: 0,
+            totalScore: 0, 
+            
+};
 
-/*
-var socket = io.connect("http://localhost:3000", { 
-  reconnection: true,
-  reconnectionDelay: 1000,
-  reconnectionDelayMax : 5000,
-  reconnectionAttempts: 99999
-});*/
-
-/*socket.on('connect', function(data) {
-   socket.emit('onMessage', 'Client: I just connected to you!');
-   socket.on('onMessage',function(message){
-    console.log(message); 
-  });
-});*/
-
-socket.on('newQ', function(question){
-  //App.id = question.c;
-  //alert(q);
-  $("<p>What is the capital of "+ question +" ?</p><br/>").appendTo("#qOne");
-  $("#FieldAns").show();
-  $("#qOne").text(question);
-});
-
-var App = {gameId:0, mySocketId:0, numPlayersInRoom:0, points: 0, id:0};
-
+var score = [0,0,0,0,0,0,0,0,0,0];
+var allCountries = [];
 socket.on('newGameRoomCreated', function(data){
-  App.gameId = data.gameId;
+  App.gRoomId = data.gRoomId;
   App.mySocketId = data.mySocketId;
-  App.numPlayersInRoom = 1;
+  App.numPlayersInRoom = data.numPlayersInRoom;
   App.points = 0;
-  console.log('GameRoom created with Id: '+ App.gameId + ' and socketId: '+ App.mySocketId + ' with '+App.numPlayersInRoom+' Players');
+  console.log('GameRoom created with Id: '+ App.gRoomId + ' and socketId: '+ App.mySocketId + ' with '+App.numPlayersInRoom+' Players');
   $(".options").hide();
   $(".waitMsg").show();
 });
@@ -50,16 +36,65 @@ socket.on('sendGameRooms', function(AllRooms){
   $("#jRoomBtn").show();
 });
 
-socket.on('testQuestion', function(data){
-  alert(data);
-  console.log("Server: "+data);
+socket.on('updateGameInfo', function(info){
+  App.gRoomId = info.gRoomId;
+  App.mySocketId = info.mySocketId;
+  App.numPlayersInRoom = info.numPlayersInRoom
 });
 
 socket.on('startTimer',function(){
   console.log('countDowner called');
   var $timeLeft = $("#countDown");
-  countDowner($timeLeft, 5, start)
+  countDowner($timeLeft, 2, syncUs)
 }); 
+
+socket.on('takeAllCountries', function(countries){
+  //console.log(countries);
+  //countries = [1,2,3,4,5,6,7,8,9,10];
+  allCountries = countries;
+  //console.log(allCountries);
+  var countryInfo = {'countryId': countries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
+  //console.log(App.mySocketId+" emitted sendQuestion from gRoomId: "+App.gRoomId+" with countryId: "+countries[App.roundCount]);
+  //socket.emit('sendQuestion1', countryInfo); // make this in another function and hit this 
+  callSendQuestion(countryInfo);
+  //function with an emit from server which means create on receive event for what server emits
+});
+
+function callSendQuestion(countryInfo){
+  console.log("emitting sendQuestion countryId: "+countryInfo.countryId);
+  socket.emit('sendQuestion', countryInfo);
+
+};
+
+socket.on('takeQuestion', function(question){
+  App.currCountry = question.country;
+  console.log('Next question country received from server: '+question.country);
+  //$("<p>What is the capital of "+question.country+" ?</p><br/>").appendTo("#qOne");
+  $.toast({
+    heading: 'Question',
+    text: 'What is the capital of '+question.country+" ?",
+    showHideTransition: 'slide', 
+    hideAfter: 6000,
+    position: {top: 175, left: 280},
+    allowToastClose: false,
+    afterHidden: function(){submitAnswer();}, 
+  });
+  $("#FieldAns").show(); // show textbox ans submit button
+});
+
+/*socket.on('wrongAnswer', function(message){
+  //$("#info").show();
+  //$("#info").text(message);
+});*/
+
+socket.on('questionResult', function(data){
+  score[App.roundCount] += data.point;
+  App.totalScore += data.point;
+  console.log("Server sent Score: "+data.point+" for round: "+App.roundCount+" & totalScore: "+App.totalScore);
+  App.roundCount += 1;  
+  //$("#totalScore").show();
+  //$("#totalScore").text(App.totalScore);
+});
 
 var createRoom = function(){
   socket.emit('createGameRoom');
@@ -72,15 +107,20 @@ var listGameRooms = function(){
 };
 
 var joinRoom = function(){
-  console.log("Joining room: "+ $("input:radio:checked").val());
-  var gRoom = $("input:radio:checked").val();
-  socket.emit('joinTo', gRoom);
+  console.log("Joining GRoomId: "+ $("input:radio:checked").val());
+  var gRoomId = $("input:radio:checked").val();
+  socket.emit('joinTo', gRoomId);
   $(".joinMsg").hide();
   //$(".waitMsg").hide();
   $("#roomList").hide();
-  console.log('GameRoom to Join: '+$("input:radio:checked").val());
+  console.log('GRoomId to Join: '+$("input:radio:checked").val());
   //alert($("input:radio:checked").val());
 };
+//create a countdown timer for 30 seconds that calls another function with emit(timedOut)
+// on server on(timedOut) -> emit(takeQuestion)
+// before emitting(timedOut) make sure roundCount < 10
+// have a property that is sent as part of client's emit(timedOut) which will be check in
+// server if found true insert null as user's answer in gamemodel
 
 function countDowner( $element, startTime, callback) {
   $(".waitMsg").hide();
@@ -100,11 +140,31 @@ function countDowner( $element, startTime, callback) {
   }
 };
 
-function start(){
-  socket.emit('sendQ');
-  console.log("emitted sendQ");
+function syncUs(){
+  var data = {'sid':App.mySocketId, 'gRoomId':App.gRoomId};
+  socket.emit('getAllCountries', data);
+  console.log(App.mySocketId+" emitted sendQ in GameRoom: "+App.gRoomId);
 };          
 
+function submitAnswer(){
+  var uAnswer = $("#ansInput").val();
+  var myAnswer = {'country': App.currCountry, "myAns": uAnswer, "sid": App.mySocketId, "nextId": allCountries[App.roundCount+1], "email": App.pEmail, "point": score[App.roundCount], "round": App.roundCount};
+  console.log(myAnswer.email+" with SID "+App.mySocketId+" emitted checkAnswer with: "+uAnswer+" for country: "+App.currCountry+" with score: "+myAnswer.point+" for round: "+myAnswer.round+" and nextId: "+myAnswer.nextId);
+  $.toast().reset('all'); //remove the question toast
+  $('#ansInput').val(''); // clear the textbox value
+  $('#sendAnsBtn').attr('disabled','disabled'); // disable the submit btn
+  if(App.rountCount > 9){
+    console.log("Game ended with totalScore: "+App.totalScore+" with this: "+score)
+    socket.emit('endGame',{'email': App.totalScore, })
+  }
+  else{
+    socket.emit('checkAnswer', myAnswer); // emit answer
+  }
+};
+
+function test(){
+  console.log("test hit!");
+};
 $(function(){
   $("#cRoomBtn").one('click',function(){
     createRoom();
@@ -116,5 +176,27 @@ $(function(){
 
   $("#jRoomBtn").one('click',function(){
     joinRoom();
+  });
+
+  $("#sendAnsBtn").bind('click',function(){
+    //console.log('submit btn clicked!');
+    submitAnswer();
+  });
+
+  App.pEmail = $("#hEmail").text();
+  console.log('Created global email variable: '+App.pEmail);
+});
+
+$(document).ready(function() {
+  $('#sendAnsBtn').attr('disabled','disabled');
+  //console.log('inside btn logic')
+  $('#ansInput').keyup(function() {
+     if($(this).val() != '') {
+       //console.log('submit btn toggled!');
+        $('#sendAnsBtn').removeAttr('disabled');
+     }
+     else{
+      $('#sendAnsBtn').attr('disabled','disabled');
+     }
   });
 });
