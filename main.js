@@ -62,7 +62,7 @@ function sleep(seconds){
 //Socket Testing
 var AllGames = {};
 
-var countries = [1,2,3,4,5,6,7,8,9,10]; // remove countries from here
+var countries = [1,2,3,4,5,6,7,8,9,10,11]; // remove countries from here
 var c;
 io.on('connection', function (socket) {
   console.log("User "+ socket.id + " connected"); 
@@ -79,14 +79,12 @@ io.on('connection', function (socket) {
     console.log("ID: ",id);
   }); 
 
-
-
   var sid;
   
-  
   //var dict = {'gameid', 'countPlayer'};
-  socket.on('createGameRoom', function(){
+  socket.on('createGameRoom', function(data){
     var thisGameId = (Math.random() * 100000) | 0;
+    var email = data.email;
     socket.emit('newGameRoomCreated', {gRoomId: thisGameId, mySocketId: socket.id, numPlayersInRoom: 1});
     console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
     socket.join(thisGameId.toString());
@@ -107,7 +105,9 @@ io.on('connection', function (socket) {
     console.log('emitted sendGameRooms');  
   });
 
-  socket.on('joinTo', function(gRoomId){
+  socket.on('joinTo', function(content){
+    var gRoomId = content.gRoomId;
+    var email = content.email;
     socket.join(gRoomId);
     var info = {'gRoomId': gRoomId,'mySocketId': socket.id, 'numPlayersInRoom': 2};
     console.log('Joined '+gRoomId);
@@ -118,12 +118,12 @@ io.on('connection', function (socket) {
     //gameInit();
     console.log('emitted startTimer to GameRoom: '+gRoomId);
     io.to(gRoomId).emit('startTimer');
-
   });
 
   socket.on('getAllCountries', function(content){
     console.log("sent question to "+content.sid+' in gameRoomId: '+content.gRoomId);
     //var q = {'country': 'India'};
+    //var countries = Array.from({length: 11}, () => Math.floor(Math.random() * (195)));
     // populate 10 random values in range(1-195) -> countries
     io.sockets.connected[content.sid].emit('takeAllCountries', countries);
   });
@@ -158,7 +158,7 @@ io.on('connection', function (socket) {
     var socketid = answer.sid;
     var nextId = answer.nextId;
     var pEmail = answer.email;
-    var score = answer.point
+    var point = answer.point
     var round = answer.round;
     var sql = "SELECT capital from countries where country = ?;";
     var inserts = [askedCountry];
@@ -173,9 +173,9 @@ io.on('connection', function (socket) {
       else{
         if( answeredCapital === results[0].capital ){
           console.log("correct answer!");
-          score += 1;
+          point += 1;
           //update db scores and other dependencies here. or below
-          io.sockets.connected[socketid].emit('questionResult', {"point": score});
+          io.sockets.connected[socketid].emit('questionResult', {"point": point});
           // sleep(1);
           // update db with the attempt from client
           // update db with scores of email
@@ -184,7 +184,24 @@ io.on('connection', function (socket) {
           // DONE : emit new question without wait
           // DONE : select country from db for nextId countryId.
           // DONE : setInterval for 2 seconds and then emit takeQuestion
-          var sql = "SELECT country from countries where id = ?;";
+          if(round === 9){
+            console.log('sendGame to be emitted!');
+            //io.sockets.connected[socketid].emit('sendGameData');   //uncomment!!! 
+          }
+          else{
+            var sql = "SELECT country from countries where id = ?;";
+            var inserts = [nextId];
+            sql = mysql.format(sql, inserts);
+            console.log("query: "+sql);
+            con.query(sql, function(err, results, fields){
+              if(err){
+                console.log(err);
+              }
+              console.log('nextCountry: '+results[0].country);
+              io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});    
+            });  
+          }
+          /*var sql = "SELECT country from countries where id = ?;";
           var inserts = [nextId];
           sql = mysql.format(sql, inserts);
           console.log("query: "+sql);
@@ -194,13 +211,31 @@ io.on('connection', function (socket) {
             }
             console.log('nextCountry: '+results[0].country);
             io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});    
-          });
+          });*/
         } 
         else{
           console.log("wrong answer!");
-          io.sockets.connected[socketid].emit('questionResult', {"point": score});
+          io.sockets.connected[socketid].emit('questionResult', {"point": point});
           // update db with attempt
-          var sql = "SELECT country from countries where id = ?;";
+          if(round === 9){
+            console.log('sendGame to be emitted!');
+            //io.sockets.connected[socketid].emit('sendGameData');   //uncomment!!! 
+          }
+          else{
+            var sql = "SELECT country from countries where id = ?;";
+            var inserts = [nextId];
+            sql = mysql.format(sql, inserts);
+            console.log("query: "+sql);
+            con.query(sql, function(err, results, fields){
+              if(err){
+                console.log(err);
+              }
+              console.log('nextCountry: '+results[0].country);
+  
+              io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});
+            });  
+          }
+          /*var sql = "SELECT country from countries where id = ?;";
           var inserts = [nextId];
           sql = mysql.format(sql, inserts);
           console.log("query: "+sql);
@@ -209,14 +244,35 @@ io.on('connection', function (socket) {
               console.log(err);
             }
             console.log('nextCountry: '+results[0].country);
+
             io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});
-          });
+          });*/
         }  
       }
     });
   });
 
+  socket.on('takeGameData', function(content){
+    var gRoomId = content.gRoomId;
+    var email = content.email;
+    // db fetch if for the same gRoomId and email other than specified, check if the 9th round's point is 
+    // updated (which means find out if the other player finsihed before you)
+    /* if (finished first)
+    { emit(lastWait)
 
+    }*/ 
+    //else{
+      // var scorePlayer1 = fetch from db
+      // var scorePlayer2 = fetch from db
+      // 
+      //compare scores
+      //fetch COMPLETE game DETAILS of both player from db
+      //emit to gRoomId: who won? and all the data
+
+    //}
+  });
+
+//more emits and listeners go here.
 });
 
 

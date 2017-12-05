@@ -10,7 +10,7 @@ var App = { gRoomId: 0,
             
 };
 
-var score = [0,0,0,0,0,0,0,0,0,0];
+var score = [0,0,0,0,0,0,0,0,0,0,0];
 var allCountries = [];
 socket.on('newGameRoomCreated', function(data){
   App.gRoomId = data.gRoomId;
@@ -63,7 +63,6 @@ socket.on('takeAllCountries', function(countries){
 function callSendQuestion(countryInfo){
   console.log("emitting sendQuestion countryId: "+countryInfo.countryId);
   socket.emit('sendQuestion', countryInfo);
-
 };
 
 socket.on('takeQuestion', function(question){
@@ -74,7 +73,7 @@ socket.on('takeQuestion', function(question){
     heading: 'Question',
     text: 'What is the capital of '+question.country+" ?",
     showHideTransition: 'slide', 
-    hideAfter: 6000,
+    hideAfter: 30000,
     position: {top: 175, left: 280},
     allowToastClose: false,
     afterHidden: function(){submitAnswer();}, 
@@ -91,13 +90,21 @@ socket.on('questionResult', function(data){
   score[App.roundCount] += data.point;
   App.totalScore += data.point;
   console.log("Server sent Score: "+data.point+" for round: "+App.roundCount+" & totalScore: "+App.totalScore);
-  App.roundCount += 1;  
+  App.roundCount += 1;
+  if(App.rountCount === 9){
+    console.log("Game ended with totalScore: "+App.totalScore+" with this: "+score)
+    //
+  }  
   //$("#totalScore").show();
   //$("#totalScore").text(App.totalScore);
 });
 
+socket.on('sendGameData', function(data){
+  socket.emit('takeGameData',{"email":pEmail, "gRoomId":gRoomId});
+});
+
 var createRoom = function(){
-  socket.emit('createGameRoom');
+  socket.emit('createGameRoom', {"email":App.pEmail});
   console.log('emitted createGameRoom');
 };
 
@@ -109,14 +116,14 @@ var listGameRooms = function(){
 var joinRoom = function(){
   console.log("Joining GRoomId: "+ $("input:radio:checked").val());
   var gRoomId = $("input:radio:checked").val();
-  socket.emit('joinTo', gRoomId);
+  socket.emit('joinTo', {"gRoomId":gRoomId, "email":App.pEmail});
   $(".joinMsg").hide();
   //$(".waitMsg").hide();
   $("#roomList").hide();
   console.log('GRoomId to Join: '+$("input:radio:checked").val());
   //alert($("input:radio:checked").val());
 };
-//create a countdown timer for 30 seconds that calls another function with emit(timedOut)
+// create a countdown timer for 30 seconds that calls another function with emit(timedOut)
 // on server on(timedOut) -> emit(takeQuestion)
 // before emitting(timedOut) make sure roundCount < 10
 // have a property that is sent as part of client's emit(timedOut) which will be check in
@@ -153,13 +160,13 @@ function submitAnswer(){
   $.toast().reset('all'); //remove the question toast
   $('#ansInput').val(''); // clear the textbox value
   $('#sendAnsBtn').attr('disabled','disabled'); // disable the submit btn
-  if(App.rountCount > 9){
+  /*if(App.rountCount === 9){
     console.log("Game ended with totalScore: "+App.totalScore+" with this: "+score)
     socket.emit('endGame',{'email': App.totalScore, })
-  }
-  else{
+  }*/
+  //else{
     socket.emit('checkAnswer', myAnswer); // emit answer
-  }
+  //}
 };
 
 function test(){
