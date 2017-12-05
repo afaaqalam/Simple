@@ -1,7 +1,14 @@
 var express = require('express');
+var https = require('https');
+var fs = require('fs');
 var app = express();
-var http = require('http').createServer(app);  
-var io = require('socket.io')(http);
+
+var server = https.createServer({
+  key: fs.readFileSync('server.key'),
+  cert: fs.readFileSync('server.crt'),
+},app);
+
+var io = require('socket.io').listen(server);
 
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
@@ -28,7 +35,7 @@ app.use(session({
   secret: 'asdfqwer1234wqedfasdfa',
   saveUninitialized: false,
   resave: false,
-  cookie: { maxAge: 600000, secure: false },
+  cookie: { maxAge: 600000, secure: true },
 }));
 
 //Password Hashing
@@ -53,13 +60,13 @@ con.connect(function(err) {
   });
 });
 
-//sleep function
-function sleep(seconds){
+//Sleep function
+/*function sleep(seconds){
   var waitUntil = new Date().getTime() + seconds*1000;
   while(new Date().getTime() < waitUntil) true;
-};
+};*/
 
-//Socket Testing
+//Socket Events
 var AllGames = {};
 
 var countries = [1,2,3,4,5,6,7,8,9,10,11]; // remove countries from here
@@ -79,24 +86,14 @@ io.on('connection', function (socket) {
     console.log("ID: ",id);
   }); 
 
-  var sid;
-  
-  //var dict = {'gameid', 'countPlayer'};
   socket.on('createGameRoom', function(data){
     var thisGameId = (Math.random() * 100000) | 0;
     var email = data.email;
     socket.emit('newGameRoomCreated', {gRoomId: thisGameId, mySocketId: socket.id, numPlayersInRoom: 1});
     console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
     socket.join(thisGameId.toString());
-    sid = socket.id;
     var numPlayersInRoom = 1;
     AllGames[thisGameId] = numPlayersInRoom;
-    //console.log("AllGames-gameId: "+AllGames.gameId+ "  AllGames-numPlayersInRoom: "+AllGames.numPlayersInRoom);
-    //create an entry in db now // { "4121231": 1}
-    //socket.on('sendQ', function(data){
-      //console.log(data);
-      //socket.emit('newQ', {Scktid: sid});
-    //}); 
   });
 
   socket.on('listGameRooms', function(){
@@ -442,8 +439,9 @@ app.get('/logout', function(req, res){
   res.redirect('/');
 });
 
+
 var port = process.env.PORT || 3000;
-http.listen(port, '127.0.0.1');
+server.listen(port);
 console.log("Server is listening on "+ port);
 
 /*

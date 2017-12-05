@@ -1,5 +1,5 @@
 //var socket = io({transports: ['websocket'], upgrade: false}).connect("http://localhost:3000");
-var socket = io.connect("http://localhost:3000");
+var socket = io.connect("https://localhost:3000");
 var App = { gRoomId: 0, 
             pEmail: "",
             mySocketId: 0, 
