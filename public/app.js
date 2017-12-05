@@ -48,15 +48,17 @@ socket.on('startTimer',function(){
   countDowner($timeLeft, 2, syncUs)
 }); 
 
-socket.on('takeAllCountries', function(countries){
+socket.on('takeAllCountries', function(countries_id){
   //console.log(countries);
   //countries = [1,2,3,4,5,6,7,8,9,10];
-  allCountries = countries;
+  //allCountries = countries_id;
   //console.log(allCountries);
-  var countryInfo = {'countryId': countries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
+  allCountries = countries_id;
+  //var countryInfo = {'countryId': allCountries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
+  //callSendQuestion(countryInfo);
   //console.log(App.mySocketId+" emitted sendQuestion from gRoomId: "+App.gRoomId+" with countryId: "+countries[App.roundCount]);
   //socket.emit('sendQuestion1', countryInfo); // make this in another function and hit this 
-  callSendQuestion(countryInfo);
+  
   //function with an emit from server which means create on receive event for what server emits
 });
 
@@ -99,8 +101,19 @@ socket.on('questionResult', function(data){
   //$("#totalScore").text(App.totalScore);
 });
 
+socket.on('takeFinalResult', function(data){
+  console.log(data);
+});
+
 socket.on('sendGameData', function(data){
-  socket.emit('takeGameData',{"email":pEmail, "gRoomId":gRoomId});
+  console.log('emitted takeGameData');
+  socket.emit('takeGameData',{"email":App.pEmail, "gRoomId":App.gRoomId, "socketId":App.mySocketId});
+});
+
+socket.on('waitForResult',function(){
+  $(".waitMsg").text("Wait for second Player to finish.")
+  $(".waitMsg").show();
+
 });
 
 var createRoom = function(){
@@ -148,14 +161,17 @@ function countDowner( $element, startTime, callback) {
 };
 
 function syncUs(){
-  var data = {'sid':App.mySocketId, 'gRoomId':App.gRoomId};
-  socket.emit('getAllCountries', data);
-  console.log(App.mySocketId+" emitted sendQ in GameRoom: "+App.gRoomId);
+  //var data = {'sid':App.mySocketId, 'gRoomId':App.gRoomId};
+  //socket.emit('getAllCountries', data);
+  //console.log(App.mySocketId+" emitted sendQ in GameRoom: "+App.gRoomId);
+  var countryInfo = {'countryId': allCountries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
+  callSendQuestion(countryInfo);
+  console.log('Emitted SendQuestion');
 };          
 
 function submitAnswer(){
   var uAnswer = $("#ansInput").val();
-  var myAnswer = {'country': App.currCountry, "myAns": uAnswer, "sid": App.mySocketId, "nextId": allCountries[App.roundCount+1], "email": App.pEmail, "point": score[App.roundCount], "round": App.roundCount};
+  var myAnswer = {'gRoomId':App.gRoomId, 'country': App.currCountry, "myAns": uAnswer, "sid": App.mySocketId, "nextId": allCountries[App.roundCount+1], "email": App.pEmail, "point": score[App.roundCount], "round": App.roundCount};
   console.log(myAnswer.email+" with SID "+App.mySocketId+" emitted checkAnswer with: "+uAnswer+" for country: "+App.currCountry+" with score: "+myAnswer.point+" for round: "+myAnswer.round+" and nextId: "+myAnswer.nextId);
   $.toast().reset('all'); //remove the question toast
   $('#ansInput').val(''); // clear the textbox value
