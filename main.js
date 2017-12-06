@@ -71,10 +71,11 @@ function sleep(seconds){
 var AllGames = {};
 var globalStats = [];
 
-//var countries = [1,2,3,4,5,6,7,8,9,10,11]; // remove countries from here
 var c;
 io.on('connection', function (socket) {
   console.log("User "+ socket.id + " connected"); 
+
+  io.sockets.connected[socket.id].emit('takeStats', globalStats);
   
   socket.on('disconnect', function(){
     setTimeout(function () {
@@ -88,25 +89,12 @@ io.on('connection', function (socket) {
     console.log("ID: ",id);
   }); 
 
-  /*
-  socket.on('getStats', function(data){
-    //var email = data.email;
-    var sql = "SELECT a.name, b.wins, b.losses FROM Users a JOIN Stats b ON a.email = b.email;";
-    con.query(sql, function(err, results){
-      if(err){
-        console.log(err);
-      }
-      console.log(JSON.stringify(results));
-      io.sockets.connected[socket.id].emit('takeStats', results);
-      console.log("emitting takeStats");  
-    });
-  });*/
-
-  socket.on('createGameRoom', function(data){
+ 
+    socket.on('createGameRoom', function(data){
     var thisGameId = (Math.random() * 100000) | 0;
     var email = data.email;
     socket.emit('newGameRoomCreated', {'gRoomId': thisGameId, 'mySocketId': socket.id, 'numPlayersInRoom': 1});
-    console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
+    console.log('GameRoomCreated: '+thisGameId+" user email: ");
     socket.join(thisGameId.toString());
     //var numPlayersInRoom = 1;
     AllGames[thisGameId] = 1;
@@ -123,7 +111,7 @@ io.on('connection', function (socket) {
 
     for(var i=0; i < 10; i++){
       var sql = "INSERT INTO GameMoves(game_id, email, answer_no) VALUES(?, ?, ?)";
-      var inserts = [thisGameId, email , i]; //removed last param
+      var inserts = [thisGameId, email , i];
       sql = mysql.format(sql, inserts);
       con.query(sql,function(err){
         if(err){
@@ -365,13 +353,6 @@ io.on('connection', function (socket) {
           // sleep(1);
           // update db with the attempt from client
 
-          /*var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
-          var inserts = [gRoomId, pEmail , round, answeredCapital];
-          sql = mysql.format(sql, inserts);
-          con.query(sql,function(err){
-            console.log(err);
-          });*/
-
           // update db with scores of email
           var sql = "INSERT INTO GameScores VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, 1];
@@ -430,15 +411,6 @@ io.on('connection', function (socket) {
           io.sockets.connected[socketid].emit('questionResult', {"point": point});
           // update db with attempt
 
-          /*var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
-          var inserts = [gRoomId, pEmail , round, answeredCapital];
-          sql = mysql.format(sql, inserts);
-          con.query(sql,function(err){
-            if(err){
-              console.log(err);      
-            }
-          });*/
-
           var sql = "INSERT INTO GameScores VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, 0];
           sql = mysql.format(sql, inserts);
@@ -475,18 +447,7 @@ io.on('connection', function (socket) {
               io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});
             });  
           }
-          /*var sql = "SELECT country from countries where id = ?;";
-          var inserts = [nextId];
-          sql = mysql.format(sql, inserts);
-          console.log("query: "+sql);
-          con.query(sql, function(err, results, fields){
-            if(err){
-              console.log(err);
-            }
-            console.log('nextCountry: '+results[0].country);
-
-            io.sockets.connected[socketid].emit('takeQuestion', {'country':results[0].country});
-          });*/
+          
         }  
       }
     });
@@ -501,7 +462,7 @@ io.on('connection', function (socket) {
     var sql = "SELECT Count(*) AS num FROM GameScores WHERE email <> (?) AND game_id = (?)";
     var inserts = [email, gRoomId];
     sql = mysql.format(sql, inserts);
-    console.log("query: "+sql);
+    //console.log("query: "+sql);
     con.query(sql, function(err, results){
       if(err){
         console.log(err);
@@ -521,8 +482,19 @@ io.on('connection', function (socket) {
           var p1Score = results[0].point;
           var p2 = results[1].email;
           var p2Score = results[1].point;
+          console.log('Player1: '+p1+" score: "+p1Score+" Player2: "+p2+" score: "+p2Score);
           if(p1Score > p2Score){
-            var decision = {"Won": p1, "Won-Total": p1Score, "Lost": p2, "Lost-Total":p2Score};
+            /*var decision = {  "Player": p1, "Decision": "Won", "Total": p1Score, 
+                              "Player": p2, "Decision": "Lost", "Total": p2Score
+                            };*/
+            var decision = [  {
+                                  "Player": p1, "Decision": "Won", "Total": p1Score
+                              },
+                              {
+                                  "Player": p2, "Decision": "Lost", "Total":p2Score
+                              }  
+                            ];                
+            console.log(decision);
 
             var sql = "UPDATE Stats Set wins = wins + 1 WHERE email = (?)"; 
             var inserts = [p1];
@@ -542,34 +514,20 @@ io.on('connection', function (socket) {
               }
             }); 
             
-            /*
-            var sql = "SELECT DISTINCT a.name FROM Users a LEFT OUTER JOIN GameScores b on a.email = b.email WHERE b.game_id = (?) AND b.email = (?)"; 
-            var inserts = [gRoomId, p1];
-            sql = mysql.format(sql, inserts);
-            console.log("query: "+sql);
-            con.query(sql, function(err, results){
-              if(err){
-                console.log(err);
-              }
-              
-                     
-            });
+            //here
             
-            var sql = "SELECT DISTINCT a.name FROM Users a LEFT OUTER JOIN GameScores b on a.email = b.email WHERE b.game_id = (?) AND b.email = (?)"; 
-            var inserts = [gRoomId, p2];
-            sql = mysql.format(sql, inserts);
-            console.log("query: "+sql);
-            con.query(sql, function(err, results){
-              if(err){
-                console.log(err);
-              }
-                         
-            });*/ // copy them in the else part also!
           }
           
           else{
-            var decision = {"Won": p2, "Won-Total": p2Score, "Lost": p1, "Lost-Total":p1Score};
-          
+            var decision = [  {
+                                  "Player": p2, "Decision": "Won", "Total": p2Score
+                              },
+                              {
+                                  "Player": p1, "Decision": "Lost", "Total":p1Score
+                              }  
+                            ];
+          console.log(decision);
+            //update stats wins
             var sql = "UPDATE Stats Set wins = wins + 1 WHERE email = (?)"; 
             var inserts = [p2];
             sql = mysql.format(sql, inserts);
@@ -579,6 +537,7 @@ io.on('connection', function (socket) {
               }
             });  
           
+            //update stats losses
             var sql = "UPDATE Stats Set losses = losses + 1 WHERE email = (?)"; 
             var inserts = [p1];
             sql = mysql.format(sql, inserts);
@@ -587,6 +546,18 @@ io.on('connection', function (socket) {
                 console.log(err);
               }
             });
+
+            /*var sql = "SELECT DISTINCT d.answer_no AS 'Questions', c.country AS 'Country', c.capital AS 'Correct Answer', f.name AS 'Player 1', d.answer_attempt AS 'Player 1 Answer', h.point AS 'Player 1 Points', g.name AS 'Player 2', e.answer_attempt AS 'Player 2 Answer', i.point AS 'Player 2 Points' FROM Game a LEFT OUTER JOIN GameQuestions b ON a.game_id = b.game_id LEFT OUTER JOIN Countries c ON b.country_id = c.country_id LEFT OUTER JOIN GameMoves d ON (a.game_id = d.game_id) AND (a.email1 = d.email) AND (d.answer_no = b.question_no) LEFT OUTER JOIN GameMoves e ON (a.game_id = e.game_id) AND (a.email2 = e.email) AND (e.answer_no = b.question_no) LEFT OUTER JOIN GameScores h ON (a.game_id = h.game_id) AND (a.email1 = h.email) AND (d.answer_no = h.question_no) LEFT OUTER JOIN GameScores i ON (a.game_id = i.game_id) AND (a.email2 = i.email) AND (d.answer_no = i.question_no) LEFT OUTER JOIN Users f ON d.email = f.email AND f.email = a.email1 LEFT OUTER JOIN Users g ON e.email = g.email AND g.email = a.email2 WHERE a.game_id = (?)";
+            var inserts = [gRoomId];
+            sql = mysql.format(sql, inserts);
+            console.log("query: "+sql);
+            con.query(sql, function(err, results){
+              if(err){
+                console.log(err);
+              }
+              console.log(JSON.stringify(results));
+              //socket.emit('takeFinalResult', {'decision':decision, 'summary': JSON.stringify(results)});
+            });*/
           }
 
           var sql = "SELECT a.name, b.wins, b.losses FROM Users a JOIN Stats b ON a.email = b.email;";
@@ -603,9 +574,24 @@ io.on('connection', function (socket) {
             //console.log("emitting takeStats");  
           });
 
-          io.to(gRoomId).emit('takeFinalResult', decision);
-          
+          //io.to(gRoomId).emit('takeFinalResult', decision);
+          //
+          var sql = "SELECT DISTINCT d.answer_no AS 'Questions', c.country AS 'Country', c.capital AS 'CorrectAnswer', f.name AS 'Player1', d.answer_attempt AS 'Player1-Answer', h.point AS 'Player1-Points', g.name AS 'Player2', e.answer_attempt AS 'Player2-Answer', i.point AS 'Player2-Points' FROM Game a LEFT OUTER JOIN GameQuestions b ON a.game_id = b.game_id LEFT OUTER JOIN Countries c ON b.country_id = c.country_id LEFT OUTER JOIN GameMoves d ON (a.game_id = d.game_id) AND (a.email1 = d.email) AND (d.answer_no = b.question_no) LEFT OUTER JOIN GameMoves e ON (a.game_id = e.game_id) AND (a.email2 = e.email) AND (e.answer_no = b.question_no) LEFT OUTER JOIN GameScores h ON (a.game_id = h.game_id) AND (a.email1 = h.email) AND (d.answer_no = h.question_no) LEFT OUTER JOIN GameScores i ON (a.game_id = i.game_id) AND (a.email2 = i.email) AND (d.answer_no = i.question_no) LEFT OUTER JOIN Users f ON d.email = f.email AND f.email = a.email1 LEFT OUTER JOIN Users g ON e.email = g.email AND g.email = a.email2 WHERE a.game_id = (?)";
+          var inserts = [gRoomId];
+          sql = mysql.format(sql, inserts);
+          //console.log("query: "+sql);
+          con.query(sql, function(err, results){
+            if(err){
+              console.log(err);
+            }
+            //console.log(JSON.stringify(results));
+            io.to(gRoomId).emit('takeFinalResult', {'decision':decision, 'summary': JSON.stringify(results)});
+          });  
         });
+        
+        
+      
+      
       }
       else{
         console.log('you finished first');
@@ -614,9 +600,9 @@ io.on('connection', function (socket) {
       }
     });
 
-    //fetch COMPLETE game DETAILS of both player from db
-    //emit to gRoomId: who won? and all the data
-    //}
+    
+    
+    
   });
 
 //more emits and listeners go here.
@@ -814,30 +800,3 @@ app.get('/logout', function(req, res){
 var port = process.env.PORT || 3000;
 server.listen(port);
 console.log("Server is listening on "+ port);
-
-/*
-
-io.sockets.connected[ socket.id ].emit('privateMsg', 'hello this is a private msg');
-
-CREATE TABLE user (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255));
-
-CREATE TABLE countries (id INTEGER AUTO_INCREMENT PRIMARY KEY, country VARCHAR(255), capital  VARCHAR(255)); 
-
-CREATE TABLE game (game_id INTEGER, email VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id, email)); 
-
-CREATE TABLE stats(email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER);
-
-CREATE TABLE gamescores (game_id INTEGER, email VARCHAR(255), q1 INTEGER, q2 INTEGER, q3 INTEGER, q4 INTEGER, q5 INTEGER, q6 INTEGER, q7 INTEGER, q8 INTEGER, q9 INTEGER, q10 INTEGER, FOREIGN KEY(game_id, email) REFERENCES game(game_id, email));
-
-CREATE TABLE gamemoves (game_id INTEGER, email VARCHAR(255), a1 VARCHAR(255), a2 VARCHAR(255), a3 VARCHAR(255), a4 VARCHAR(255), a5 VARCHAR(255), a6 VARCHAR(255), a7 VARCHAR(255), a8 VARCHAR(255), a9 VARCHAR(255), a10 VARCHAR(255), FOREIGN KEY(game_id, email) REFERENCES game(game_id, email) );
-
-CREATE TABLE gq (game_id INTEGER, id INTEGER, FOREIGN KEY(id) REFERENCES countries(id));
-
->>for stats page
-SELECT a.name, b.wins, b.losses FROM user a JOIN stats b ON a.email = b.email;
-
->> for gamemoves page
-// query needed
-//select game_id,email,a1,a2,a3,a4,a5,a6,a7,a8,a9,a10 from gamemoves where game_id in (select game_id from game where game_id in (select game_id from game where email='rob@gmail.com') and email!='rob@gmail.com');
-*/
-

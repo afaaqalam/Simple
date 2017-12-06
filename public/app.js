@@ -1,7 +1,7 @@
-//var socket = io({transports: ['websocket'], upgrade: false}).connect("http://localhost:3000");
 var socket = io.connect("https://localhost:3000");
 var App = { gRoomId: 0, 
             pEmail: "",
+            pName: "",
             mySocketId: 0, 
             numPlayersInRoom: 0, 
             roundCount: 0, 
@@ -13,6 +13,7 @@ var App = { gRoomId: 0,
 var score = [0,0,0,0,0,0,0,0,0,0,0];
 var allCountries = [];
 var localStats = [];
+var gameSummary = [];
 socket.on('newGameRoomCreated', function(data){
   App.gRoomId = data.gRoomId;
   App.mySocketId = data.mySocketId;
@@ -53,8 +54,6 @@ socket.on('updateGameInfo', function(info){
                         'roundCount':App.roundCount
                       };
     console.log(countryInfo);                      
-    //callSendQuestion(countryInfo);
-    //AutoResumeGame();
     console.log('emitting imBack with:  '+App.gRoomId);
     socket.emit('imBack', {"gRoomId": App.gRoomId, "mySocketId":App.mySocketId});
   }
@@ -100,7 +99,6 @@ socket.on('takeAllCountries', function(countries_id){
 socket.on('takeQuestion', function(question){
   App.currCountry = question.country;
   console.log('Next question country received from server: '+question.country);
-  //$("<p>What is the capital of "+question.country+" ?</p><br/>").appendTo("#qOne");
   $.toast({
     heading: 'Question',
     text: 'What is the capital of '+question.country+" ?",
@@ -110,7 +108,7 @@ socket.on('takeQuestion', function(question){
     allowToastClose: false,
     afterHidden: function(){submitAnswer();}, 
   });
-  $("#FieldAns").show(); // show textbox ans submit button
+  $("#FieldAns").show();
 });
 
 socket.on('questionResult', function(data){
@@ -124,11 +122,33 @@ socket.on('questionResult', function(data){
 });
 
 socket.on('takeFinalResult', function(data){
-  console.log(data);
+  console.log(data.decision);
+  console.log(data.summary);
+  gameSummary = data.summary;
+  populateSummary();
+  $(".waitMsg").hide();
+  $("#FieldAns").hide();
+  $.toast({
+    heading: 'Result',
+    text:  data.decision[0].Player+" "+data.decision[0].Decision+" with "+data.decision[0].Total+" points AND "+data.decision[1].Player+" "+data.decision[1].Decision+" with "+data.decision[1].Total+" points",
+    showHideTransition: 'slide', 
+    hideAfter: false,
+    position: 'bottom-center',//{top: 175, left: 280},
+    allowToastClose: true,
+    //afterHidden: function(){submitAnswer();}, 
+  });
 });
 
+function populateSummary(){
+  $("#gSum-table").show();
+  $("#gSum-table").tabulator("setData", gameSummary);  
+};
+
 socket.on('takeStats', function(data){
+  console.log('received stats');
+  //console.log(data);
   localStats = data;
+  console.log(localStats);
 });
 
 socket.on('sendGameData', function(data){
@@ -139,6 +159,7 @@ socket.on('sendGameData', function(data){
 socket.on('waitForResult',function(){
   $(".waitMsg").text("Wait for second Player to finish.")
   $(".waitMsg").show();
+  $("#FieldAns").hide();
 
 });
 
@@ -255,10 +276,25 @@ $(function(){
     cResumeGame();
   });
 
-  $("#gStats").one('click',function(){
+  $("#gPlayNow").bind('click',function(){
+    console.log("Play now Clicked!");
+    $("#gSum-table").hide();
+    $("#stats-table").hide();
+    $("#qOne").hide();
+    $("#FieldAns").hide();
+    $("#content").show();
+    $("#roomList").hide();
+  });
+
+  $("#gStats").bind('click',function(){
     console.log('stats link clicked!');
-    fetchStats();
-  })
+    console.log(localStats);
+    $("#stats-table").show();
+    $("#stats-table").tabulator("setData", localStats);
+    $("#content").hide();
+    $("#gSum-table").hide();
+    //fetchStats(); // decide when to call after current game is over!!!!!!!!!
+  });
 
   $("#sendAnsBtn").bind('click',function(){
     submitAnswer();
@@ -266,11 +302,13 @@ $(function(){
 
   App.pEmail = $("#hEmail").text();
   console.log('Created global email variable: '+App.pEmail);
+
+  App.pEmail = $("#hName").text();
+  console.log('Created global name variable: '+App.pName);
 });
 
 $(document).ready(function() {
   $('#sendAnsBtn').attr('disabled','disabled');
-  //console.log('inside btn logic')
   $('#ansInput').keyup(function() {
      if($(this).val() != '') {
        //console.log('submit btn toggled!');
@@ -280,4 +318,32 @@ $(document).ready(function() {
       $('#sendAnsBtn').attr('disabled','disabled');
      }
   });
+
+  $("#stats-table").tabulator({
+    height: "311px",
+    layout: "fitColumns",
+    columns: [
+                {title: "Player", field: "name"},
+                {title: "Wins", field: "wins"},
+                {title: "Losses", field: "losses"},
+  
+            ]
+  }).hide();
+
+  $("#gSum-table").tabulator({
+    height: "301px",
+    layout: "fitColumns",
+    columns: [
+                {title: "Questions", field: "Questions"},
+                {title: "Country", field: "Country"},
+                {title: "Capital", field:"CorrectAnswer"},
+                {title: "Player 1", field:"Player1"},
+                {title: "Answer", field: "Player1-Answer"},
+                {title: "Points", field: "Player1-Points", bottomCalc: "sum"},
+                {title: "Player 2", field:"Player2"},
+                {title: "Answer", field:"Player2-Answer"},
+                {title: "Points", field:"Player2-Points", bottomCalc: "sum"},
+              ]
+  }).hide();
+
 });

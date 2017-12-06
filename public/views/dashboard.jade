@@ -3,9 +3,10 @@ extends base
 block body
   h1 Dashboard
   p.
-    <a id= "gStats" href="">Stats</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
+    <a id="gPlayNow" href="#">Play</a>&nbsp;&nbsp;&nbsp;&nbsp;<a id= "gHistory" href="#">Game History</a>&nbsp;&nbsp;&nbsp;&nbsp;<a id= "gStats" href="#">Standings</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
   
   h2 Hello, #{name}  
+  p(hidden)#hName #{name}
   p(hidden)#hEmail #{email}
   
 
@@ -33,7 +34,12 @@ block body
       width: 2em;
       height: 2em;  
       margin-top: 2em;   
+    },
+    .s-table{
+      margin-left:100px;
+      margin-right:100px;
     }
+
     
   #content
     .options 
@@ -67,9 +73,9 @@ block body
       <br/>
       button#sendAnsBtn Submit
 
-  #Stats
-    .allStats
-      p#totalScore
+  #gSum-table.gs-table
 
-
+  #stats-table.s-table
+    
+       
   
