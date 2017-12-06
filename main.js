@@ -10,6 +10,8 @@ var server = https.createServer({
 
 var io = require('socket.io').listen(server);
 
+var helmet = require('helmet');
+//var csrf = require('csurf');
 var bodyParser = require('body-parser');
 var mongoose = require('mongoose');
 var mysql = require('mysql');
@@ -29,14 +31,21 @@ app.use(morgan('combined'));
 app.use(cors());
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({extended: false}));
+app.use(helmet());
+
 app.use(validator());
 app.use(session({
   cookieName: 'cqsession',
   secret: 'asdfqwer1234wqedfasdfa',
   saveUninitialized: false,
   resave: false,
-  cookie: { maxAge: 600000, secure: true },
+  cookie: { 
+    maxAge: 600000, 
+    secure: true,
+    httpOnly: true 
+  },
 }));
+//app.use(csrf());
 
 //Password Hashing
 var saltRounds = 11;
@@ -616,6 +625,7 @@ app.get('/', function(req,res){
 });
 
 app.get('/register', function(req, res){
+  //res.locals.csrftoken = req.csrfToken();
   res.render('register.jade');
 });
 

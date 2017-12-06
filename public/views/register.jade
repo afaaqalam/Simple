@@ -31,5 +31,5 @@ block body
       span Password:
       input(type="password", name="password", required=true)
       br
-
+      input(type="hidden", name="_csrf", value="#{csrf}")
       input(type="submit")
