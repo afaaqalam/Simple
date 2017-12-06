@@ -12,6 +12,7 @@ var App = { gRoomId: 0,
 
 var score = [0,0,0,0,0,0,0,0,0,0,0];
 var allCountries = [];
+var localStats = [];
 socket.on('newGameRoomCreated', function(data){
   App.gRoomId = data.gRoomId;
   App.mySocketId = data.mySocketId;
@@ -39,7 +40,24 @@ socket.on('sendGameRooms', function(AllRooms){
 socket.on('updateGameInfo', function(info){
   App.gRoomId = info.gRoomId;
   App.mySocketId = info.mySocketId;
-  App.numPlayersInRoom = info.numPlayersInRoom
+  App.numPlayersInRoom = info.numPlayersInRoom;
+  App.roundCount = info.roundCount;
+  console.log(info);
+
+  if(info.resume === 1){
+    console.log('control came inside resume==1');
+    var countryInfo = {
+                        'countryId': allCountries[App.roundCount],
+                        'sid': App.mySocketId,
+                        'gRoomId': App.gRoomId,                        
+                        'roundCount':App.roundCount
+                      };
+    console.log(countryInfo);                      
+    //callSendQuestion(countryInfo);
+    //AutoResumeGame();
+    console.log('emitting imBack with:  '+App.gRoomId);
+    socket.emit('imBack', {"gRoomId": App.gRoomId, "mySocketId":App.mySocketId});
+  }
 });
 
 socket.on('startTimer',function(){
@@ -48,24 +66,36 @@ socket.on('startTimer',function(){
   countDowner($timeLeft, 2, syncUs)
 }); 
 
-socket.on('takeAllCountries', function(countries_id){
-  //console.log(countries);
-  //countries = [1,2,3,4,5,6,7,8,9,10];
-  //allCountries = countries_id;
-  //console.log(allCountries);
-  allCountries = countries_id;
-  //var countryInfo = {'countryId': allCountries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
-  //callSendQuestion(countryInfo);
-  //console.log(App.mySocketId+" emitted sendQuestion from gRoomId: "+App.gRoomId+" with countryId: "+countries[App.roundCount]);
-  //socket.emit('sendQuestion1', countryInfo); // make this in another function and hit this 
-  
-  //function with an emit from server which means create on receive event for what server emits
-});
+socket.on('startTimer2',function(){
+  $("#FieldAns").hide();
+  $("#content").hide();
+  $(".waitMsg").hide();
+  console.log('countDowner called');
+  var $timeLeft = $("#countDown");
+  countDowner($timeLeft, 2, autoResumeGame)
+}); 
+
+function syncUs(){
+  var countryInfo = {
+                      'countryId': allCountries[App.roundCount], 
+                      'gRoomId': App.gRoomId,
+                      'sid': App.mySocketId,
+                      'roundCount': App.roundCount 
+                    };
+  console.log(countryInfo);
+  callSendQuestion(countryInfo);
+  console.log('Emitted SendQuestion');
+};
 
 function callSendQuestion(countryInfo){
   console.log("emitting sendQuestion countryId: "+countryInfo.countryId);
   socket.emit('sendQuestion', countryInfo);
 };
+
+socket.on('takeAllCountries', function(countries_id){
+  allCountries = countries_id;
+  console.log("received countries: "+allCountries);
+});
 
 socket.on('takeQuestion', function(question){
   App.currCountry = question.country;
@@ -83,11 +113,6 @@ socket.on('takeQuestion', function(question){
   $("#FieldAns").show(); // show textbox ans submit button
 });
 
-/*socket.on('wrongAnswer', function(message){
-  //$("#info").show();
-  //$("#info").text(message);
-});*/
-
 socket.on('questionResult', function(data){
   score[App.roundCount] += data.point;
   App.totalScore += data.point;
@@ -95,14 +120,15 @@ socket.on('questionResult', function(data){
   App.roundCount += 1;
   if(App.rountCount === 9){
     console.log("Game ended with totalScore: "+App.totalScore+" with this: "+score)
-    //
   }  
-  //$("#totalScore").show();
-  //$("#totalScore").text(App.totalScore);
 });
 
 socket.on('takeFinalResult', function(data){
   console.log(data);
+});
+
+socket.on('takeStats', function(data){
+  localStats = data;
 });
 
 socket.on('sendGameData', function(data){
@@ -116,6 +142,32 @@ socket.on('waitForResult',function(){
 
 });
 
+socket.on("pauseGame",function(email){
+  if(email !== App.pEmail)
+  {
+    $.toast().reset('all');
+    $(".waitMsg").text("Wait for second Player to rejoin!")
+    $(".waitMsg").show();
+    //setTimeInterval for 30 seconds to endGame.
+    //call AutoResumeGame
+  }
+});
+
+function autoResumeGame(){
+  var countryInfo = { 
+                      'countryId': allCountries[App.roundCount], 
+                      'gRoomId ': App.gRoomId, 
+                      'sid': App.mySocketId, 
+                      'roundCount':App.roundCount
+                    };
+  callSendQuestion(countryInfo);
+  
+};
+
+socket.on('resumeTest',function(data){
+  console.log('resumeTest was hit!'+data);
+});
+
 var createRoom = function(){
   socket.emit('createGameRoom', {"email":App.pEmail});
   console.log('emitted createGameRoom');
@@ -127,20 +179,18 @@ var listGameRooms = function(){
 };
 
 var joinRoom = function(){
-  console.log("Joining GRoomId: "+ $("input:radio:checked").val());
   var gRoomId = $("input:radio:checked").val();
-  socket.emit('joinTo', {"gRoomId":gRoomId, "email":App.pEmail});
+  App.gRoomId = gRoomId;
+  console.log('->value now: '+App.gRoomId);
+  var content = {'gRoomId': App.gRoomId, 'email': App.pEmail};
+  console.log("Value of gRoodId:  "+gRoomId);
+  socket.emit('joinTo', content);
   $(".joinMsg").hide();
   //$(".waitMsg").hide();
   $("#roomList").hide();
-  console.log('GRoomId to Join: '+$("input:radio:checked").val());
-  //alert($("input:radio:checked").val());
+  console.log('GRoomId sent to Join: '+$("input:radio:checked").val());
 };
-// create a countdown timer for 30 seconds that calls another function with emit(timedOut)
-// on server on(timedOut) -> emit(takeQuestion)
-// before emitting(timedOut) make sure roundCount < 10
-// have a property that is sent as part of client's emit(timedOut) which will be check in
-// server if found true insert null as user's answer in gamemodel
+
 
 function countDowner( $element, startTime, callback) {
   $(".waitMsg").hide();
@@ -160,14 +210,7 @@ function countDowner( $element, startTime, callback) {
   }
 };
 
-function syncUs(){
-  //var data = {'sid':App.mySocketId, 'gRoomId':App.gRoomId};
-  //socket.emit('getAllCountries', data);
-  //console.log(App.mySocketId+" emitted sendQ in GameRoom: "+App.gRoomId);
-  var countryInfo = {'countryId': allCountries[App.roundCount], 'gRoomId ': App.gRoomId, 'sid': App.mySocketId}
-  callSendQuestion(countryInfo);
-  console.log('Emitted SendQuestion');
-};          
+         
 
 function submitAnswer(){
   var uAnswer = $("#ansInput").val();
@@ -176,13 +219,19 @@ function submitAnswer(){
   $.toast().reset('all'); //remove the question toast
   $('#ansInput').val(''); // clear the textbox value
   $('#sendAnsBtn').attr('disabled','disabled'); // disable the submit btn
-  /*if(App.rountCount === 9){
-    console.log("Game ended with totalScore: "+App.totalScore+" with this: "+score)
-    socket.emit('endGame',{'email': App.totalScore, })
-  }*/
-  //else{
-    socket.emit('checkAnswer', myAnswer); // emit answer
-  //}
+  socket.emit('checkAnswer', myAnswer); // emit answer
+};
+
+function cResumeGame(){
+  var data = {'email':App.pEmail};
+  console.log('emitting checkResumeGame');
+  socket.emit('cResumeGame',data);
+  
+};
+
+function fetchStats(){
+  console.log('emitting fetchStats.');
+  //handle logic for display on UI
 };
 
 function test(){
@@ -200,9 +249,18 @@ $(function(){
   $("#jRoomBtn").one('click',function(){
     joinRoom();
   });
+  
+  $("#rGameBtn").one('click',function(){
+    console.log('resume btn clicked');
+    cResumeGame();
+  });
+
+  $("#gStats").one('click',function(){
+    console.log('stats link clicked!');
+    fetchStats();
+  })
 
   $("#sendAnsBtn").bind('click',function(){
-    //console.log('submit btn clicked!');
     submitAnswer();
   });
 

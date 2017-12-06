@@ -3,7 +3,7 @@ extends base
 block body
   h1 Dashboard
   p.
-    <a href="/stats">Stats</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
+    <a id= "gStats" href="">Stats</a>&nbsp;&nbsp;&nbsp;&nbsp;<a href="/logout">Logout</a>
   
   h2 Hello, #{name}  
   p(hidden)#hEmail #{email}
@@ -39,6 +39,7 @@ block body
     .options 
       button#cRoomBtn Create Game
       button#lRoomBtn Join Game
+      button#rGameBtn Resume Game
   
   p(hidden).waitMsg
     | Wait for second Player to join.
@@ -66,8 +67,9 @@ block body
       <br/>
       button#sendAnsBtn Submit
 
-  #ScoreArea(hidden)
-    .SArea
-      p#totalScore    
+  #Stats
+    .allStats
+      p#totalScore
+
 
   

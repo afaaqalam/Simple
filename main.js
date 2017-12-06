@@ -54,7 +54,7 @@ con.connect(function(err) {
   if (err) throw err;
   console.log("Connected to Database!");
   //var sql = 'CREATE TABLE IF NOT EXISTS user (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255)); CREATE TABLE IF NOT EXISTS countries (id INTEGER AUTO_INCREMENT, country VARCHAR(255), capital VARCHAR(255), PRIMARY KEY(id) ); CREATE TABLE IF NOT EXISTS stats(email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER); CREATE TABLE IF NOT EXISTS game (game_id INTEGER, email VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id, email)); CREATE TABLE IF NOT EXISTS gamescores (game_id INTEGER, email VARCHAR(255), q1 INTEGER, q2 INTEGER, q3 INTEGER, q4 INTEGER, q5 INTEGER, q6 INTEGER, q7 INTEGER, q8 INTEGER, q9 INTEGER, q10 INTEGER, FOREIGN KEY(game_id, email) REFERENCES game(game_id, email)); CREATE TABLE IF NOT EXISTS gamemoves (game_id INTEGER, email VARCHAR(255), a1 VARCHAR(255), a2 VARCHAR(255), a3 VARCHAR(255), a4 VARCHAR(255), a5 VARCHAR(255), a6 VARCHAR(255), a7 VARCHAR(255), a8 VARCHAR(255), a9 VARCHAR(255), a10 VARCHAR(255), FOREIGN KEY(game_id, email) REFERENCES game(game_id, email) ); CREATE TABLE IF NOT EXISTS gq (game_id INTEGER, id INTEGER, FOREIGN KEY(id) REFERENCES countries(id));';
-  var sql = 'CREATE TABLE IF NOT EXISTS Users (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255)); CREATE TABLE IF NOT EXISTS Countries (country_id INTEGER PRIMARY KEY, country VARCHAR(255), capital  VARCHAR(255)); CREATE TABLE IF NOT EXISTS Game (game_id INTEGER, email1 VARCHAR(255), email2 VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id)); CREATE TABLE IF NOT EXISTS Stats (email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER); CREATE TABLE IF NOT EXISTS GameScores (game_id INTEGER, email VARCHAR(255), question_no INTEGER, point INTEGER, FOREIGN KEY(game_id) REFERENCES Game(game_id)); CREATE TABLE IF NOT EXISTS GameMoves (game_id INTEGER, email VARCHAR(255), answer_no INTEGER, answer_attempt VARCHAR(255), FOREIGN KEY(game_id) REFERENCES Game(game_id)); CREATE TABLE IF NOT EXISTS GameQuestions (game_id INTEGER, country_id INTEGER, question_no INTEGER, FOREIGN KEY(country_id) REFERENCES Countries(country_id)); CREATE TABLE IF NOT EXISTS ResumeModel (email VARCHAR(255), game_id INTEGER, session_id VARCHAR(255), FOREIGN KEY(game_id) REFERENCES Game(game_id));';
+  var sql = 'CREATE TABLE IF NOT EXISTS Users (name CHAR(255), email VARCHAR(255) PRIMARY KEY, password VARCHAR(255)); CREATE TABLE IF NOT EXISTS Countries (country_id INTEGER PRIMARY KEY, country VARCHAR(255), capital  VARCHAR(255)); CREATE TABLE IF NOT EXISTS Game (game_id INTEGER, email1 VARCHAR(255), email2 VARCHAR(255), CONSTRAINT PK_Game PRIMARY KEY (game_id)); CREATE TABLE IF NOT EXISTS Stats (email VARCHAR(255) PRIMARY KEY, wins INTEGER, losses INTEGER); CREATE TABLE IF NOT EXISTS GameScores (game_id INTEGER, email VARCHAR(255), question_no INTEGER, point INTEGER, FOREIGN KEY(game_id) REFERENCES Game(game_id)); CREATE TABLE IF NOT EXISTS GameMoves (game_id INTEGER, email VARCHAR(255), answer_no INTEGER, answer_attempt VARCHAR(255), FOREIGN KEY(game_id) REFERENCES Game(game_id)); CREATE TABLE IF NOT EXISTS GameQuestions (game_id INTEGER, country_id INTEGER, question_no INTEGER, FOREIGN KEY(country_id) REFERENCES Countries(country_id));';
   con.query(sql, function (err, result) {
     if (err) throw err;
     console.log("All tables created!");
@@ -69,6 +69,7 @@ function sleep(seconds){
 
 //Socket Events
 var AllGames = {};
+var globalStats = [];
 
 //var countries = [1,2,3,4,5,6,7,8,9,10,11]; // remove countries from here
 var c;
@@ -87,14 +88,28 @@ io.on('connection', function (socket) {
     console.log("ID: ",id);
   }); 
 
+  /*
+  socket.on('getStats', function(data){
+    //var email = data.email;
+    var sql = "SELECT a.name, b.wins, b.losses FROM Users a JOIN Stats b ON a.email = b.email;";
+    con.query(sql, function(err, results){
+      if(err){
+        console.log(err);
+      }
+      console.log(JSON.stringify(results));
+      io.sockets.connected[socket.id].emit('takeStats', results);
+      console.log("emitting takeStats");  
+    });
+  });*/
+
   socket.on('createGameRoom', function(data){
     var thisGameId = (Math.random() * 100000) | 0;
     var email = data.email;
-    socket.emit('newGameRoomCreated', {gRoomId: thisGameId, mySocketId: socket.id, numPlayersInRoom: 1});
+    socket.emit('newGameRoomCreated', {'gRoomId': thisGameId, 'mySocketId': socket.id, 'numPlayersInRoom': 1});
     console.log('GameRoomCreated: '+thisGameId+" user email: ");//+user);
     socket.join(thisGameId.toString());
-    var numPlayersInRoom = 1;
-    AllGames[thisGameId] = numPlayersInRoom;
+    //var numPlayersInRoom = 1;
+    AllGames[thisGameId] = 1;
     //db insert for above logic
 
     var sql = "INSERT INTO Game VALUES (?, ?, ?);";
@@ -105,6 +120,22 @@ io.on('connection', function (socket) {
         console.log("error creating Game record");
        } // handle else case with success code from SQL success codes.
     });
+
+    for(var i=0; i < 10; i++){
+      var sql = "INSERT INTO GameMoves(game_id, email, answer_no) VALUES(?, ?, ?)";
+      var inserts = [thisGameId, email , i]; //removed last param
+      sql = mysql.format(sql, inserts);
+      con.query(sql,function(err){
+        if(err){
+          console.log(err);      
+        }
+      });
+    };
+  });
+
+  socket.on('imBack',function(data){
+    socket.join(data.gRoomId);
+    io.to(data.gRoomId).emit('startTimer2');
   });
 
   socket.on('listGameRooms', function(){
@@ -117,7 +148,13 @@ io.on('connection', function (socket) {
     var gRoomId = content.gRoomId;
     var email = content.email;
     socket.join(gRoomId);
-    var info = {'gRoomId': gRoomId,'mySocketId': socket.id, 'numPlayersInRoom': 2};
+    var info = {
+                  'gRoomId': gRoomId,
+                  'mySocketId': socket.id, 
+                  'numPlayersInRoom': 2, 
+                  'roundCount': 0, 
+                  'resume':0
+                };
     console.log('Joined '+gRoomId);
     console.log(info);
     AllGames[gRoomId] = 2;
@@ -132,43 +169,153 @@ io.on('connection', function (socket) {
         console.log("error creating Game record");
        }
     });
-
-    //fill countries for this game
-
+    
     //var countries_id = Array.from({length: 11}, () => Math.floor(Math.random() * (10)));
     var countries_id = [76, 184, 185, 60, 82, 8, 64, 66, 84, 142, 11 ]
     for(var i=0; i < 10; i++){
       var sql = "INSERT INTO GameQuestions VALUES(?, ?, ?)";
       var inserts = [gRoomId, countries_id[i] , i];
       sql = mysql.format(sql, inserts);
-        con.query(sql,function(err){
+      con.query(sql,function(err){
+        if(err){
           console.log(err);
-        });
-      };
+        }
+      });
+    };
     
+    for(var i=0; i < 10; i++){
+      var sql = "INSERT INTO GameMoves(game_id, email, answer_no) VALUES(?, ?, ?)";
+      var inserts = [gRoomId, email , i]; //last param removed
+      sql = mysql.format(sql, inserts);
+      con.query(sql,function(err){
+        if(err){
+          console.log(err);      
+        }
+      });
+    };
     
     console.log('emitted startTimer to GameRoom: '+gRoomId);
     io.to(gRoomId).emit('startTimer');
     //io.sockets.connected[content.sid].emit('takeAllCountries', countries);  
     console.log('emitted countries_id array to gRoom');
     io.to(gRoomId).emit('takeAllCountries', countries_id);
-    //gameInit();
     //console.log('emitted startTimer to GameRoom: '+gRoomId);
     //io.to(gRoomId).emit('startTimer');
   });
 
-  /*
-  socket.on('getAllCountries', function(content){
-    console.log("sent question to "+content.sid+' in gameRoomId: '+content.gRoomId);
-    //var q = {'country': 'India'};
-    //var countries = Array.from({length: 11}, () => Math.floor(Math.random() * (195)));
-    // populate 10 random values in range(1-195) -> countries
-    io.sockets.connected[content.sid].emit('takeAllCountries', countries);
-  });*/
+  socket.on('cResumeGame', function(data){
+    var email = data.email;
+    //socket.emit('updateGameInfo', info);
+    console.log("emitting resumeTest event!");
+    //socket.emit('resumeTest', 'hello');
+    io.sockets.connected[socket.id].emit('resumeTest', 'hello');  
+
+    io.sockets.emit("pauseGame", email);
+
+    //DOne:  modify insert statements to update statements for gamemoves!
+    // to get the gRoomId, SELECT game_id from gamemoves where email='<email>' AND (answer_no =9 AND answer_attempt= NULL)
+    var sql = "SELECT game_id from GameMoves WHERE email= (?) AND (answer_no = 9 AND answer_attempt IS NULL)";
+    var inserts = [email];
+    var eGRoomId;
+    sql = mysql.format(sql, inserts);
+    console.log("query1: "+sql);
+          con.query(sql,function(err, results){
+            if(err){
+              console.log(err);      
+            }
+            eGRoomId = results[0].game_id;
+            console.log("(1) the value inside eGRoomId: "+eGRoomId);
+
+            console.log("(2)the value inside eGRoomId: "+eGRoomId);
+            var sql = "SELECT MAX(question_no) AS rcount FROM GameScores WHERE email = (?) AND game_id = (?)";
+            var inserts = [email, eGRoomId];
+            var eRoundCount;
+            sql = mysql.format(sql, inserts);
+            console.log("query2: "+sql);
+            console.log(sql);
+                  con.query(sql,function(err, results){
+                    if(err){
+                      console.log(err);      
+                    }
+                    eRoundCount = results[0].rcount;
+                    console.log("eRoundCount: "+eRoundCount);
+            });
+
+            console.log("(3)the value inside eGRoomId: "+eGRoomId);
+            var sql = "SELECT country_id from GameQuestions WHERE game_id = (?)";
+            var inserts = [eGRoomId];
+            sql = mysql.format(sql, inserts);
+            console.log("query3: "+sql);
+                  con.query(sql,function(err, results){
+                    if(err){
+                      console.log(err);      
+                    }
+                    var eCountries_id = [];
+                    for(var i=0; i<10; i++){
+                      eCountries_id.push(results[i].country_id);
+                    }
+                    console.log(eCountries_id);
+                    console.log(JSON.stringify(results));
+
+                    io.sockets.connected[socket.id].emit('takeAllCountries', eCountries_id);
+                    var eApp = {
+                                  "mySocketId": socket.id,
+                                  "gRoomId": eGRoomId,
+                                  "roundCount": eRoundCount+1,
+                                  "numPlayersInRoom": 2,
+                                  "resume": 1
+                    };
+                    console.log(eApp);
+                    io.sockets.connected[socket.id].emit('updateGameInfo', eApp);
+
+
+            });
+    });
+
+    /*
+    console.log("(2)the value inside eGRoomId: "+eGRoomId);
+    var sql = "SELECT MAX(question_no) AS rcount FROM GameScores WHERE email = (?) AND game_id = (?)";
+    var inserts = [email, eGRoomId];
+    var eRoundCount;
+    sql = mysql.format(sql, inserts);
+          con.query(sql,function(err, results){
+            if(err){
+              console.log(err);      
+            }
+            eRoundCount = results[0].rcount;
+            console.log("eRoundCount: "+eRoundCount);
+    });*/
+
+    /*console.log("(3)the value inside eGRoomId: "+eGRoomId);
+    var countries_id = "SELECT country_id from GameQuestions WHERE game_id = (?)";
+    var inserts = [eGRoomId];
+    sql = mysql.format(sql, inserts);
+          con.query(sql,function(err, results){
+            if(err){
+              console.log(err);      
+            }
+            console.log(JSON.toString(results));
+    });*/
+
+    // draw gameId
+    //now, select max(Question-no) from gamescores where email=<email> and game_id=<gamedID from top>
+    // 
+    // emit => var countries_id = select countries_id from gamequestions where gameId=<gameid from top>
+    // socket.emit('takeAllCountries', countries_id);
+    /* App {
+      gRoomId:
+      mySocketId:
+      numPlayersInRoom
+      roundCount: COUNT IN QUERY 2 + 1
+        
+
+    } 
+    */
+  });
 
   socket.on('sendQuestion', function(data){
-    //db updations now
     var gRoomId = data.gRoomId;
+    console.log("-->"+data.gRoomId);
     var cId = data.countryId;
     var roundCount = data.roundCount;
     var socketid = data.sid;
@@ -218,19 +365,30 @@ io.on('connection', function (socket) {
           // sleep(1);
           // update db with the attempt from client
 
-          var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
+          /*var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, answeredCapital];
           sql = mysql.format(sql, inserts);
           con.query(sql,function(err){
             console.log(err);
-          });
+          });*/
 
           // update db with scores of email
           var sql = "INSERT INTO GameScores VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, 1];
           sql = mysql.format(sql, inserts);
           con.query(sql,function(err){
-            console.log(err);
+            if(err){
+              console.log(err);
+            }
+          });
+
+          var sql = "UPDATE GameMoves Set answer_attempt = (?) WHERE game_id = (?) AND email = (?) AND answer_no = (?)";
+          var inserts = [answeredCapital, gRoomId , pEmail, round];
+          sql = mysql.format(sql, inserts);
+          con.query(sql,function(err){
+            if(err){
+              console.log(err);
+            }
           });
 
           // increment score for socketid received
@@ -272,14 +430,14 @@ io.on('connection', function (socket) {
           io.sockets.connected[socketid].emit('questionResult', {"point": point});
           // update db with attempt
 
-          var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
+          /*var sql = "INSERT INTO GameMoves VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, answeredCapital];
           sql = mysql.format(sql, inserts);
           con.query(sql,function(err){
             if(err){
               console.log(err);      
             }
-          });
+          });*/
 
           var sql = "INSERT INTO GameScores VALUES(?, ?, ?, ?)";
           var inserts = [gRoomId, pEmail , round, 0];
@@ -288,6 +446,15 @@ io.on('connection', function (socket) {
             if(err){
               console.log(err);
             }  
+          });
+
+          var sql = "UPDATE GameMoves Set answer_attempt = (?) WHERE game_id = (?) AND email = (?) AND answer_no = (?)";
+          var inserts = [answeredCapital, gRoomId , pEmail, round];
+          sql = mysql.format(sql, inserts);
+          con.query(sql,function(err){
+            if(err){
+              console.log(err);
+            }
           });
 
           if(round === 9){
@@ -373,7 +540,31 @@ io.on('connection', function (socket) {
               if(err){
                 console.log(err);
               }
-            });    
+            }); 
+            
+            /*
+            var sql = "SELECT DISTINCT a.name FROM Users a LEFT OUTER JOIN GameScores b on a.email = b.email WHERE b.game_id = (?) AND b.email = (?)"; 
+            var inserts = [gRoomId, p1];
+            sql = mysql.format(sql, inserts);
+            console.log("query: "+sql);
+            con.query(sql, function(err, results){
+              if(err){
+                console.log(err);
+              }
+              
+                     
+            });
+            
+            var sql = "SELECT DISTINCT a.name FROM Users a LEFT OUTER JOIN GameScores b on a.email = b.email WHERE b.game_id = (?) AND b.email = (?)"; 
+            var inserts = [gRoomId, p2];
+            sql = mysql.format(sql, inserts);
+            console.log("query: "+sql);
+            con.query(sql, function(err, results){
+              if(err){
+                console.log(err);
+              }
+                         
+            });*/ // copy them in the else part also!
           }
           
           else{
@@ -397,6 +588,20 @@ io.on('connection', function (socket) {
               }
             });
           }
+
+          var sql = "SELECT a.name, b.wins, b.losses FROM Users a JOIN Stats b ON a.email = b.email;";
+          con.query(sql, function(err, results){
+            if(err){
+              console.log(err);
+            }
+            //console.log(JSON.stringify(results));
+            globalStats = JSON.stringify(results);
+            console.log(globalStats);
+            socket.emit('takeStats', globalStats);
+            console.log("emitted global stats");
+            //io.sockets.connected[socket.id].emit('takeStats', results);
+            //console.log("emitting takeStats");  
+          });
 
           io.to(gRoomId).emit('takeFinalResult', decision);
           
@@ -445,7 +650,9 @@ app.post('/register', function(req, res) {
   var inserts = [req.body.email, 0, 0];
   sql = mysql.format(sql, inserts);
   con.query(sql, function(err){
-    console.log(err);
+    if(err){
+      console.log(err);
+    }
   });
 
   if(errors){
@@ -511,6 +718,18 @@ app.post('/login', function(req, res){
     console.log(errors);
     return res.render('login.jade', {error: errors});
   }
+
+  var sql = "SELECT a.name, b.wins, b.losses FROM Users a JOIN Stats b ON a.email = b.email;";
+  con.query(sql, function(err, results){
+    if(err){
+      console.log(err);
+    }
+    //console.log(JSON.stringify(results));
+    globalStats = JSON.stringify(results);
+    console.log(globalStats);
+    //io.sockets.connected[socket.id].emit('takeStats', results);
+    //console.log("emitting takeStats");  
+  });
 
   var sql = "SELECT * FROM users WHERE email = ?";
   var inserts = [req.body.email];
