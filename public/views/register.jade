@@ -11,10 +11,8 @@ block body
         p!= err.msg
 
 
-  if error
-    p.err #{error}
-
-  .frm
+  
+  #mainForm.frm
     form(method="post" autocomplete="off")
       span First Name:
       input(type="text", name="name", required=true)
@@ -27,5 +25,4 @@ block body
       span Password:
       input(type="password", name="password", required=true)
       br
-      //input(type="hidden", name="_csrf", value="#{csrfToken}")
       input(type="submit")

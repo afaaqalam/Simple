@@ -194,8 +194,8 @@ io.on('connection', function (socket) {
        }
     });
     
-    //var countries_id = Array.from({length: 11}, () => Math.floor(Math.random() * (10)));
-    var countries_id = [76, 184, 185, 60, 82, 8, 64, 66, 84, 142, 11 ]
+    var countries_id = Array.from({length: 11}, () => Math.floor(Math.random() * (195)));
+    //var countries_id = [76, 184, 185, 60, 82, 8, 64, 66, 84, 142, 11 ]
     for(var i=0; i < 10; i++){
       var sql = "INSERT INTO GameQuestions VALUES(?, ?, ?)";
       var inserts = [gRoomId, countries_id[i] , i];
@@ -577,6 +577,7 @@ app.post('/register', function(req, res) {
   var password = req.body.name;
 
   req.checkBody('name', 'Name is required!').notEmpty();
+  req.checkBody('name', 'Name must be at least 2 characters long!').isLength({min: 2 });
   req.checkBody('email', 'Email address is required!').notEmpty();
   req.checkBody('email', 'Enter a valid Email address!').isEmail();
   req.check('password', 'Password must be at least 8 characters long!').isLength({ min: 8 });
@@ -721,28 +722,6 @@ app.get('/dashboard', function(req, res){
     res.redirect('/login');
   }
 });    
-
-app.get('/stats', function(req, res){
-  if(req.session && req.session.email){
-    var sql = "SELECT * from users where email = ?";
-    var inserts = [req.session.email];
-    sql = mysql.format(sql, inserts);
-    con.query(sql, function(err, results, fields){
-      if(results.length < 0){
-        req.session.reset();
-        res.redirect('/login');
-      }
-      else{
-        res.locals.email = results[0].email;
-        res.locals.name = results[0].name;
-        res.render('stats.jade');
-      }
-    });
-  }
-  else{
-    res.redirect('/login');
-  }
-});
 
 app.get('/logout', function(req, res){
   req.session.destroy();

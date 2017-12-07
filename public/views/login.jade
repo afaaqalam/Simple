@@ -9,7 +9,7 @@ block body
       p!= error[0].msg
   
 
-  if error
+  //if error
     p.err #{error}
 
   form(method="post" autocomplete="off")
@@ -19,9 +19,7 @@ block body
 
     span Password:
     input(type="password", name="password", required=true)
-    input(type="hidden", name="_csrf", value="#{csrfToken}")
     br
-    span password123
     br
 
     input(type="submit")
