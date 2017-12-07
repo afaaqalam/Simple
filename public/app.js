@@ -14,6 +14,8 @@ var score = [0,0,0,0,0,0,0,0,0,0,0];
 var allCountries = [];
 var localStats = [];
 var gameSummary = [];
+var gameHistory = [];
+
 socket.on('newGameRoomCreated', function(data){
   App.gRoomId = data.gRoomId;
   App.mySocketId = data.mySocketId;
@@ -37,6 +39,8 @@ socket.on('sendGameRooms', function(AllRooms){
   console.log(AllRooms);
   $("#jRoomBtn").show();
 });
+
+
 
 socket.on('updateGameInfo', function(info){
   App.gRoomId = info.gRoomId;
@@ -133,9 +137,9 @@ socket.on('takeFinalResult', function(data){
     text:  data.decision[0].Player+" "+data.decision[0].Decision+" with "+data.decision[0].Total+" points AND "+data.decision[1].Player+" "+data.decision[1].Decision+" with "+data.decision[1].Total+" points",
     showHideTransition: 'slide', 
     hideAfter: false,
-    position: 'bottom-center',//{top: 175, left: 280},
+    position: 'bottom-center',
     allowToastClose: true,
-    //afterHidden: function(){submitAnswer();}, 
+    
   });
 });
 
@@ -187,6 +191,18 @@ function autoResumeGame(){
 
 socket.on('resumeTest',function(data){
   console.log('resumeTest was hit!'+data);
+});
+
+socket.on('takeGameHistory', function(data){
+  gameHistory = data;
+  //console.log(data);
+  //console.log(gameHistory);
+  $("#stats-table").hide();
+  $("#content").hide();
+  $("#gSum-table").hide();
+  $("#gHistory-table").show();
+  $("#gHistory-table").tabulator("setData", gameHistory);
+
 });
 
 var createRoom = function(){
@@ -278,12 +294,14 @@ $(function(){
 
   $("#gPlayNow").bind('click',function(){
     console.log("Play now Clicked!");
+    $("#content").show();
     $("#gSum-table").hide();
     $("#stats-table").hide();
     $("#qOne").hide();
     $("#FieldAns").hide();
-    $("#content").show();
     $("#roomList").hide();
+    $("#gHistory-table").hide();
+    $("#content").show();
   });
 
   $("#gStats").bind('click',function(){
@@ -293,7 +311,15 @@ $(function(){
     $("#stats-table").tabulator("setData", localStats);
     $("#content").hide();
     $("#gSum-table").hide();
+    $("#gHistory-table").hide();
+
     //fetchStats(); // decide when to call after current game is over!!!!!!!!!
+  });
+
+  $("#gHistory").bind('click', function(){
+    console.log('game history clicked!');
+    console.log("emitted sendGameHistory");
+    socket.emit('sendGameHistory', {"email": App.pEmail, "socketId":App.mySocketId});
   });
 
   $("#sendAnsBtn").bind('click',function(){
@@ -303,7 +329,7 @@ $(function(){
   App.pEmail = $("#hEmail").text();
   console.log('Created global email variable: '+App.pEmail);
 
-  App.pEmail = $("#hName").text();
+  App.pName = $("#hName").text();
   console.log('Created global name variable: '+App.pName);
 });
 
@@ -343,6 +369,22 @@ $(document).ready(function() {
                 {title: "Player 2", field:"Player2"},
                 {title: "Answer", field:"Player2-Answer"},
                 {title: "Points", field:"Player2-Points", bottomCalc: "sum"},
+              ]
+  }).hide();
+
+  $("#gHistory-table").tabulator({
+    height: "350px",
+    layout: "fitColumns",
+    columns: [
+                {title: "Questions", field: "Questions"},
+                {title: "Country", field: "Country"},
+                {title: "Capital", field:"CorrectAnswer"},
+                {title: "Player 1", field:"Player1"},
+                {title: "Answer", field: "Player1-Answer"},
+                {title: "Points", field: "Player1-Points"},
+                {title: "Player 2", field:"Player2"},
+                {title: "Answer", field:"Player2-Answer"},
+                {title: "Points", field:"Player2-Points"},
               ]
   }).hide();
 

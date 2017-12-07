@@ -4,12 +4,6 @@ extends base
 block body
   h1 Login
 
-  style(type='text/css').
-    .errorDiv, .err{
-      color: red;
-      margin-bottom: 2em;
-    }
-
   .errorDiv
     if error  
       p!= error[0].msg
@@ -18,14 +12,14 @@ block body
   if error
     p.err #{error}
 
-  form(method="post")
+  form(method="post" autocomplete="off")
     span Email: 
     input(type="email", name="email", required=true)
     br
 
     span Password:
     input(type="password", name="password", required=true)
-    input(type="hidden", name="_csrf", value="#{csrftoken}")
+    input(type="hidden", name="_csrf", value="#{csrfToken}")
     br
     span password123
     br

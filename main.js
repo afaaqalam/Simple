@@ -11,9 +11,9 @@ var server = https.createServer({
 var io = require('socket.io').listen(server);
 
 var helmet = require('helmet');
-//var csrf = require('csurf');
+var csrf = require('csurf');
 var bodyParser = require('body-parser');
-var mongoose = require('mongoose');
+//var mongoose = require('mongoose');
 var mysql = require('mysql');
 var session = require('express-session');
 var path = require('path');
@@ -31,7 +31,6 @@ app.use(morgan('combined'));
 app.use(cors());
 app.use(bodyParser.json())
 app.use(bodyParser.urlencoded({extended: false}));
-app.use(helmet());
 
 app.use(validator());
 app.use(session({
@@ -45,6 +44,15 @@ app.use(session({
     httpOnly: true 
   },
 }));
+app.use(helmet());
+app.use(helmet.noCache());
+app.use(helmet.contentSecurityPolicy({
+  directives: {
+    defaultSrc: ["'self'",'wss://localhost:3000'],
+    styleSrc: ["'self'","'unsafe-inline'"],
+  }, setAllHeaders: true,
+}));
+app.use(helmet.referrerPolicy({ policy: 'same-origin' }));
 //app.use(csrf());
 
 //Password Hashing
@@ -133,6 +141,25 @@ io.on('connection', function (socket) {
   socket.on('imBack',function(data){
     socket.join(data.gRoomId);
     io.to(data.gRoomId).emit('startTimer2');
+  });
+
+  socket.on('sendGameHistory', function(data){
+    var email = data.email;
+    var socketId = data.socketId;
+    
+    var sql = "SELECT DISTINCT d.answer_no AS 'Questions', c.country AS 'Country', c.capital AS 'CorrectAnswer', f.name AS 'Player1', d.answer_attempt AS 'Player1-Answer', h.point AS 'Player1-Points', g.name AS 'Player2', e.answer_attempt AS 'Player2-Answer', i.point AS 'Player2-Points' FROM Game a LEFT OUTER JOIN GameQuestions b ON a.game_id = b.game_id LEFT OUTER JOIN Countries c ON b.country_id = c.country_id LEFT OUTER JOIN GameMoves d ON (a.game_id = d.game_id) AND (a.email1 = d.email) AND (d.answer_no = b.question_no) LEFT OUTER JOIN GameMoves e ON (a.game_id = e.game_id) AND (a.email2 = e.email) AND (e.answer_no = b.question_no) LEFT OUTER JOIN GameScores h ON (a.game_id = h.game_id) AND (a.email1 = h.email) AND (d.answer_no = h.question_no) LEFT OUTER JOIN GameScores i ON (a.game_id = i.game_id) AND (a.email2 = i.email) AND (d.answer_no = i.question_no) LEFT OUTER JOIN Users f ON d.email = f.email AND f.email = a.email1 LEFT OUTER JOIN Users g ON e.email = g.email AND g.email = a.email2 WHERE a.game_id IN (SELECT game_id FROM Game WHERE (game_id IS NOT NULL) AND (email1 = (?) OR email2 = (?)));";
+    var inserts = [email, email];
+    sql = mysql.format(sql, inserts);
+    console.log("query gameHistory: "+sql);
+    con.query(sql, function(err, results){
+      if(err){
+        console.log(err);
+      }
+      console.log(JSON.stringify(results));
+      //io.sockets.connected[socket.id].emit('takeGameHistory', JSON.stringify(results));
+      socket.emit('takeGameHistory', JSON.stringify(results));
+      console.log("emitted takeGameHistory");  
+    });  
   });
 
   socket.on('listGameRooms', function(){
@@ -626,6 +653,7 @@ app.get('/', function(req,res){
 
 app.get('/register', function(req, res){
   //res.locals.csrftoken = req.csrfToken();
+  //res.locals.csrfToken = req.csrfToken();
   res.render('register.jade');
 });
 
@@ -686,7 +714,8 @@ app.get('/login', function(req, res){
     con.query(sql, function(err, results, fields){
       if(results.length < 0){
         req.session.destroy();
-        res.redirect('/login');
+        //res.locals.csrfToken = req.csrfToken();
+        res.render('/login');
       }
       else{
         res.locals.email = results[0].email;
@@ -695,7 +724,8 @@ app.get('/login', function(req, res){
       }
     });
   }
-  else {		
+  else {
+  //res.locals.csrfToken = req.csrfToken();  		
   res.render('login.jade');
   }
 });

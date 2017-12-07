@@ -3,11 +3,7 @@ extends base
 block body
   h1 Create an Account
 
-  style(type='text/css').
-    .errorDiv, .err {
-      color: red;
-      margin-bottom: 2em;
-    }
+  
     
   .errorDiv
     if error  
@@ -19,7 +15,7 @@ block body
     p.err #{error}
 
   .frm
-    form(method="post")
+    form(method="post" autocomplete="off")
       span First Name:
       input(type="text", name="name", required=true)
       br
@@ -31,5 +27,5 @@ block body
       span Password:
       input(type="password", name="password", required=true)
       br
-      input(type="hidden", name="_csrf", value="#{csrf}")
+      //input(type="hidden", name="_csrf", value="#{csrfToken}")
       input(type="submit")
